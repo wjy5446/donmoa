@@ -4,6 +4,5 @@
 from .donmoa import Donmoa
 from .data_collector import DataCollector
 from .csv_exporter import CSVExporter
-from .scheduler import DonmoaScheduler
 
-__all__ = ["Donmoa", "DataCollector", "CSVExporter", "DonmoaScheduler"]
+__all__ = ["Donmoa", "DataCollector", "CSVExporter"]

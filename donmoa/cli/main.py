@@ -63,11 +63,10 @@ def cli(ctx, config, verbose, deployment):
 @cli.command()
 @click.option("--provider", "-p", help="특정 Provider만 수집")
 @click.option("--output-dir", "-o", type=click.Path(), help="CSV 출력 디렉토리")
-@click.option("--async/--sync", default=True, help="비동기/동기 수집 (기본: 비동기)")
 @click.option("--save-result", "-s", is_flag=True, help="실행 결과를 파일로 저장")
 @click.option("--validate", is_flag=True, help="데이터 유효성 검증 수행")
 @click.pass_context
-def collect(ctx, provider, output_dir, async_mode, save_result, validate):
+def collect(ctx, provider, output_dir, save_result, validate):
     """데이터를 수집하고 CSV 파일로 내보냅니다."""
     donmoa = ctx.obj
 
@@ -88,9 +87,7 @@ def collect(ctx, provider, output_dir, async_mode, save_result, validate):
                     )
                     return
 
-                collected_data = donmoa.collect_data(
-                    [provider], use_async=async_mode
-                )
+                collected_data = donmoa.collect_data([provider])
                 progress.update(task, description="CSV 내보내기 중...")
                 exported_files = donmoa.export_to_csv(
                     collected_data, output_dir
@@ -98,7 +95,7 @@ def collect(ctx, provider, output_dir, async_mode, save_result, validate):
             else:
                 # 전체 워크플로우 실행
                 result = donmoa.run_full_workflow(
-                    output_dir=output_dir, use_async=async_mode
+                    output_dir=output_dir
                 )
 
                 if result["status"] == "success":

@@ -1,14 +1,15 @@
 """
 데이터 수집 핵심 클래스
 """
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any, Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Dict, List, Optional
 
 from ..providers.base import BaseProvider
-from ..utils.logger import LoggerMixin
 from ..utils.config import config_manager
+from ..utils.logger import LoggerMixin
 
 
 class DataCollector(LoggerMixin):
@@ -27,8 +28,8 @@ class DataCollector(LoggerMixin):
         self.validation_results: Dict[str, Dict[str, Any]] = {}
 
         # 설정에서 기본값 로드
-        self.retry_count = config_manager.get('providers.retry_count', 3)
-        self.timeout = config_manager.get('providers.timeout', 30)
+        self.retry_count = config_manager.get("providers.retry_count", 3)
+        self.timeout = config_manager.get("providers.timeout", 30)
 
     def add_provider(self, provider: BaseProvider) -> None:
         """
@@ -50,7 +51,9 @@ class DataCollector(LoggerMixin):
         self.providers = [p for p in self.providers if p.name != provider_name]
         self.logger.info(f"Provider 제거: {provider_name}")
 
-    def collect_from_provider(self, provider: BaseProvider, output_dir: Path) -> Dict[str, List[Dict[str, Any]]]:
+    def collect_from_provider(
+        self, provider: BaseProvider, output_dir: Path
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
         단일 Provider에서 데이터를 수집합니다.
 
@@ -73,26 +76,34 @@ class DataCollector(LoggerMixin):
             # 수집 통계 기록
             collection_time = datetime.now() - start_time
             self.collection_stats[provider.name] = {
-                'status': 'success',
-                'collection_time': collection_time.total_seconds(),
-                'data_count': sum(len(data) for data in provider_data.values() if isinstance(data, list)),
-                'timestamp': datetime.now()
+                "status": "success",
+                "collection_time": collection_time.total_seconds(),
+                "data_count": sum(
+                    len(data)
+                    for data in provider_data.values()
+                    if isinstance(data, list)
+                ),
+                "timestamp": datetime.now(),
             }
 
-            self.logger.info(f"{provider.name} 데이터 수집 완료: {collection_time.total_seconds():.2f}초")
+            self.logger.info(
+                f"{provider.name} 데이터 수집 완료: {collection_time.total_seconds():.2f}초"
+            )
 
         except Exception as e:
             self.logger.error(f"{provider.name} 데이터 수집 실패: {e}")
             self.collection_stats[provider.name] = {
-                'status': 'error',
-                'error_message': str(e),
-                'collection_time': (datetime.now() - start_time).total_seconds(),
-                'timestamp': datetime.now()
+                "status": "error",
+                "error_message": str(e),
+                "collection_time": (datetime.now() - start_time).total_seconds(),
+                "timestamp": datetime.now(),
             }
 
         return provider_data
 
-    def collect_all_data(self, output_dir: Path, use_async: bool = True) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+    def collect_all_data(
+        self, output_dir: Path, use_async: bool = True
+    ) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
         """
         모든 Provider에서 데이터를 수집합니다.
 
@@ -114,7 +125,9 @@ class DataCollector(LoggerMixin):
         else:
             return self._collect_sync(output_dir)
 
-    def _collect_sync(self, output_dir: Path) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+    def _collect_sync(
+        self, output_dir: Path
+    ) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
         """동기적으로 데이터를 수집합니다."""
         for provider in self.providers:
             try:
@@ -126,12 +139,16 @@ class DataCollector(LoggerMixin):
 
         return self.collected_data
 
-    def _collect_async(self, output_dir: Path) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+    def _collect_async(
+        self, output_dir: Path
+    ) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
         """비동기적으로 데이터를 수집합니다."""
         with ThreadPoolExecutor(max_workers=min(len(self.providers), 5)) as executor:
             # 각 Provider에 대해 수집 작업 제출
             future_to_provider = {
-                executor.submit(self.collect_from_provider, provider, output_dir): provider
+                executor.submit(
+                    self.collect_from_provider, provider, output_dir
+                ): provider
                 for provider in self.providers
             }
 
@@ -160,7 +177,7 @@ class DataCollector(LoggerMixin):
             errors = []
 
             # 필수 데이터 타입 확인
-            required_types = ['balances', 'transactions', 'positions']
+            required_types = ["balances", "transactions", "positions"]
             for data_type in required_types:
                 if data_type not in provider_data:
                     errors.append(f"필수 데이터 타입 누락: {data_type}")
@@ -190,11 +207,11 @@ class DataCollector(LoggerMixin):
             교차 검증 결과
         """
         validation_result = {
-            'status': 'success',
-            'errors': [],
-            'warnings': [],
-            'comparison_results': {},
-            'total_assets_by_provider': {}
+            "status": "success",
+            "errors": [],
+            "warnings": [],
+            "comparison_results": {},
+            "total_assets_by_provider": {},
         }
 
         try:
@@ -203,73 +220,84 @@ class DataCollector(LoggerMixin):
                 total_assets = 0
 
                 # 잔고 총합
-                if 'balances' in provider_data:
+                if "balances" in provider_data:
                     balance_total = sum(
-                        float(item.get('balance', 0))
-                        for item in provider_data['balances']
+                        float(item.get("balance", 0))
+                        for item in provider_data["balances"]
                     )
                     total_assets += balance_total
 
                 # 포지션 총합
-                if 'positions' in provider_data:
+                if "positions" in provider_data:
                     position_total = sum(
-                        float(item.get('quantity', 0)) * float(item.get('current_price', 0))
-                        for item in provider_data['positions']
+                        float(item.get("quantity", 0))
+                        * float(item.get("current_price", 0))
+                        for item in provider_data["positions"]
                     )
                     total_assets += position_total
 
-                validation_result['total_assets_by_provider'][provider_name] = total_assets
+                validation_result["total_assets_by_provider"][
+                    provider_name
+                ] = total_assets
 
                 self.logger.info(f"{provider_name} 총 자산: {total_assets:,.0f}원")
 
             # Provider 간 자산 총합 비교
-            if len(validation_result['total_assets_by_provider']) > 1:
-                providers = list(validation_result['total_assets_by_provider'].keys())
+            if len(validation_result["total_assets_by_provider"]) > 1:
+                providers = list(validation_result["total_assets_by_provider"].keys())
                 base_provider = providers[0]
-                base_total = validation_result['total_assets_by_provider'][base_provider]
+                base_total = validation_result["total_assets_by_provider"][
+                    base_provider
+                ]
 
                 for other_provider in providers[1:]:
-                    other_total = validation_result['total_assets_by_provider'][other_provider]
+                    other_total = validation_result["total_assets_by_provider"][
+                        other_provider
+                    ]
                     difference = abs(base_total - other_total)
-                    difference_rate = (difference / base_total * 100) if base_total > 0 else 0
+                    difference_rate = (
+                        (difference / base_total * 100) if base_total > 0 else 0
+                    )
 
                     comparison = {
-                        'base_provider': base_provider,
-                        'base_total': base_total,
-                        'other_provider': other_provider,
-                        'other_total': other_total,
-                        'difference': difference,
-                        'difference_rate': difference_rate
+                        "base_provider": base_provider,
+                        "base_total": base_total,
+                        "other_provider": other_provider,
+                        "other_total": other_total,
+                        "difference": difference,
+                        "difference_rate": difference_rate,
                     }
 
-                    validation_result['comparison_results'][f"{base_provider}_vs_{other_provider}"] = comparison
+                    validation_result["comparison_results"][
+                        f"{base_provider}_vs_{other_provider}"
+                    ] = comparison
 
                     # 차이가 5% 이상인 경우 경고
                     if difference_rate > 5:
-                                            validation_result['warnings'].append(
-                        f"{base_provider}와 {other_provider} 간 자산 총합 차이가 "
-                        f"{difference_rate:.1f}% ({difference:,.0f}원)입니다"
-                    )
+                        validation_result["warnings"].append(
+                            f"{base_provider}와 {other_provider} 간 자산 총합 차이가 "
+                            f"{difference_rate:.1f}% ({difference:,.0f}원)입니다"
+                        )
 
                     # 차이가 20% 이상인 경우 오류
                     if difference_rate > 20:
-                        validation_result['errors'].append(
+                        validation_result["errors"].append(
                             f"{base_provider}와 {other_provider} 간 자산 총합 차이가 "
                             f"{difference_rate:.1f}% ({difference:,.0f}원)으로 심각합니다"
                         )
 
             # 검증 결과에 따른 상태 설정
-            if validation_result['errors']:
-                validation_result['status'] = 'error'
-            elif validation_result['warnings']:
-                validation_result['status'] = 'warning'
+            if validation_result["errors"]:
+                validation_result["status"] = "error"
+            elif validation_result["warnings"]:
+                validation_result["status"] = "warning"
 
             # 검증 결과 저장
             self.validation_results = validation_result
 
         except Exception as e:
-            validation_result['status'] = 'error'
-            validation_result['errors'].append(f"교차 검증 중 오류 발생: {str(e)}")
+            validation_result["status"] = "error"
+            validation_result["errors"].append(f"교차 검증 중 오류 발생: {str(e)}")
             self.logger.error(f"교차 검증 오류: {e}")
 
         return validation_result
@@ -283,32 +311,37 @@ class DataCollector(LoggerMixin):
         """
         total_providers = len(self.providers)
         successful_providers = sum(
-            1 for stats in self.collection_stats.values()
-            if stats.get('status') == 'success'
+            1
+            for stats in self.collection_stats.values()
+            if stats.get("status") == "success"
         )
 
         total_data_count = sum(
-            stats.get('data_count', 0)
+            stats.get("data_count", 0)
             for stats in self.collection_stats.values()
-            if stats.get('status') == 'success'
+            if stats.get("status") == "success"
         )
 
         avg_collection_time = sum(
-            stats.get('collection_time', 0)
+            stats.get("collection_time", 0)
             for stats in self.collection_stats.values()
-            if stats.get('status') == 'success'
+            if stats.get("status") == "success"
         ) / max(successful_providers, 1)
 
         return {
-            'total_providers': total_providers,
-            'successful_providers': successful_providers,
-            'failed_providers': total_providers - successful_providers,
-            'success_rate': (successful_providers / total_providers * 100) if total_providers > 0 else 0,
-            'total_data_count': total_data_count,
-            'average_collection_time': avg_collection_time,
-            'collection_timestamp': datetime.now(),
-            'provider_details': self.collection_stats,
-            'validation_status': self.validation_results.get('status', 'unknown')
+            "total_providers": total_providers,
+            "successful_providers": successful_providers,
+            "failed_providers": total_providers - successful_providers,
+            "success_rate": (
+                (successful_providers / total_providers * 100)
+                if total_providers > 0
+                else 0
+            ),
+            "total_data_count": total_data_count,
+            "average_collection_time": avg_collection_time,
+            "collection_timestamp": datetime.now(),
+            "provider_details": self.collection_stats,
+            "validation_status": self.validation_results.get("status", "unknown"),
         }
 
     def get_data_statistics(self) -> Dict[str, Dict[str, Any]]:
@@ -326,15 +359,15 @@ class DataCollector(LoggerMixin):
             for data_type, data_list in provider_data.items():
                 if isinstance(data_list, list) and data_list:
                     provider_stats[data_type] = {
-                        'count': len(data_list),
-                        'sample_keys': list(data_list[0].keys()) if data_list else [],
-                        'last_updated': datetime.now()
+                        "count": len(data_list),
+                        "sample_keys": list(data_list[0].keys()) if data_list else [],
+                        "last_updated": datetime.now(),
                     }
                 else:
                     provider_stats[data_type] = {
-                        'count': 0,
-                        'sample_keys': [],
-                        'last_updated': datetime.now()
+                        "count": 0,
+                        "sample_keys": [],
+                        "last_updated": datetime.now(),
                     }
 
             stats[provider_name] = provider_stats
@@ -359,20 +392,21 @@ class DataCollector(LoggerMixin):
             출력 파일 경로
         """
         if output_path is None:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_path = Path(f"collection_summary_{timestamp}.json")
 
         summary = {
-            'collection_summary': self.get_collection_summary(),
-            'data_statistics': self.get_data_statistics(),
-            'validation_errors': self.validate_collected_data(),
-            'cross_provider_validation': self.validate_cross_provider_data(),
-            'export_timestamp': datetime.now().isoformat()
+            "collection_summary": self.get_collection_summary(),
+            "data_statistics": self.get_data_statistics(),
+            "validation_errors": self.validate_collected_data(),
+            "cross_provider_validation": self.validate_cross_provider_data(),
+            "export_timestamp": datetime.now().isoformat(),
         }
 
         try:
             import json
-            with open(output_path, 'w', encoding='utf-8') as f:
+
+            with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(summary, f, ensure_ascii=False, indent=2, default=str)
 
             self.logger.info(f"데이터 수집 요약 내보내기 완료: {output_path}")

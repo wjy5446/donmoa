@@ -1,17 +1,21 @@
 """
 기관별 데이터 수집 모듈의 기본 인터페이스
 """
+
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List
+
 from ..utils.logger import logger
 
 
 class BaseProvider(ABC):
     """기관별 데이터 수집을 위한 기본 클래스"""
 
-    def __init__(self, name: str, provider_type: str, credentials: Dict[str, str] = None):
+    def __init__(
+        self, name: str, provider_type: str, credentials: Dict[str, str] = None
+    ):
         self.name = name
         self.provider_type = provider_type
         self.credentials = credentials or {}
@@ -20,10 +24,10 @@ class BaseProvider(ABC):
 
         # 데이터 검증을 위한 통계
         self.data_statistics = {
-            'total_assets': 0,
-            'total_balance': 0,
-            'total_positions': 0,
-            'last_updated': None
+            "total_assets": 0,
+            "total_balance": 0,
+            "total_positions": 0,
+            "last_updated": None,
         }
 
     @abstractmethod
@@ -39,7 +43,9 @@ class BaseProvider(ABC):
         """
         pass
 
-    def read_manual_files(self, input_dir: Path, file_patterns: Dict[str, str]) -> Dict[str, Path]:
+    def read_manual_files(
+        self, input_dir: Path, file_patterns: Dict[str, str]
+    ) -> Dict[str, Path]:
         """
         수동으로 다운로드한 파일들을 읽습니다.
 
@@ -60,10 +66,7 @@ class BaseProvider(ABC):
             matching_files = list(input_dir.glob(pattern))
             if matching_files:
                 # 가장 최근 파일 선택 (수정 시간 기준)
-                latest_file = max(
-                    matching_files,
-                    key=lambda f: f.stat().st_mtime
-                )
+                latest_file = max(matching_files, key=lambda f: f.stat().st_mtime)
                 found_files[data_type] = latest_file
                 logger.info(f"{data_type} 파일 발견: {latest_file}")
             else:
@@ -72,7 +75,9 @@ class BaseProvider(ABC):
 
         return found_files
 
-    def collect_data_from_files(self, input_dir: Path, file_patterns: Dict[str, str]) -> Dict[str, List[Dict[str, Any]]]:
+    def collect_data_from_files(
+        self, input_dir: Path, file_patterns: Dict[str, str]
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
         수동 파일에서 데이터를 수집합니다.
 
@@ -102,7 +107,7 @@ class BaseProvider(ABC):
 
             # 3단계: 계좌 매핑 적용
             for data_type, data_list in parsed_data.items():
-                if data_type in ['balances', 'transactions']:
+                if data_type in ["balances", "transactions"]:
                     parsed_data[data_type] = self.apply_account_mapping(data_list)
 
             # 4단계: 데이터 검증
@@ -110,7 +115,7 @@ class BaseProvider(ABC):
             logger.info(f"{self.name} 데이터 검증 완료: {validation_result['status']}")
 
             # 검증 결과를 데이터에 포함
-            parsed_data['_validation'] = validation_result
+            parsed_data["_validation"] = validation_result
 
             return parsed_data
 
@@ -147,7 +152,7 @@ class BaseProvider(ABC):
 
             # 3단계: 계좌 매핑 적용
             for data_type, data_list in parsed_data.items():
-                if data_type in ['balances', 'transactions']:
+                if data_type in ["balances", "transactions"]:
                     parsed_data[data_type] = self.apply_account_mapping(data_list)
 
             # 4단계: 데이터 검증
@@ -155,7 +160,7 @@ class BaseProvider(ABC):
             logger.info(f"{self.name} 데이터 검증 완료: {validation_result['status']}")
 
             # 검증 결과를 데이터에 포함
-            parsed_data['_validation'] = validation_result
+            parsed_data["_validation"] = validation_result
 
             return parsed_data
 
@@ -164,7 +169,9 @@ class BaseProvider(ABC):
             return {}
 
     @abstractmethod
-    def parse_data(self, file_paths: Dict[str, Path]) -> Dict[str, List[Dict[str, Any]]]:
+    def parse_data(
+        self, file_paths: Dict[str, Path]
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
         파일을 파싱하여 구조화된 데이터로 변환합니다.
 
@@ -176,7 +183,9 @@ class BaseProvider(ABC):
         """
         pass
 
-    def apply_account_mapping(self, data_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def apply_account_mapping(
+        self, data_list: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """
         계좌 매핑을 적용합니다.
 
@@ -194,14 +203,14 @@ class BaseProvider(ABC):
             mapped_item = item.copy()
 
             # 계좌명 매핑 적용
-            if 'account_name' in mapped_item:
-                original_account = mapped_item['account_name']
+            if "account_name" in mapped_item:
+                original_account = mapped_item["account_name"]
                 for unified_account, mapped_account in self.account_mapping.items():
                     if original_account == mapped_account:
-                        mapped_item['unified_account'] = unified_account
+                        mapped_item["unified_account"] = unified_account
                         break
                 else:
-                    mapped_item['unified_account'] = '미매핑'
+                    mapped_item["unified_account"] = "미매핑"
 
             mapped_data.append(mapped_item)
 
@@ -218,55 +227,61 @@ class BaseProvider(ABC):
             검증 결과
         """
         validation_result = {
-            'status': 'success',
-            'errors': [],
-            'warnings': [],
-            'total_records': 0,
-            'total_assets': 0
+            "status": "success",
+            "errors": [],
+            "warnings": [],
+            "total_records": 0,
+            "total_assets": 0,
         }
 
         try:
             # 총 레코드 수 계산
             for data_type, data_list in data.items():
-                if data_type != '_validation':
-                    validation_result['total_records'] += len(data_list)
+                if data_type != "_validation":
+                    validation_result["total_records"] += len(data_list)
 
             # 잔고 데이터 검증
-            if 'balances' in data:
-                balances = data['balances']
+            if "balances" in data:
+                balances = data["balances"]
                 total_balance = sum(
-                    float(item.get('balance', 0))
+                    float(item.get("balance", 0))
                     for item in balances
-                    if item.get('balance')
+                    if item.get("balance")
                 )
-                validation_result['total_assets'] = total_balance
-                self.data_statistics['total_balance'] = total_balance
+                validation_result["total_assets"] = total_balance
+                self.data_statistics["total_balance"] = total_balance
 
             # 포지션 데이터 검증
-            if 'positions' in data:
-                positions = data['positions']
+            if "positions" in data:
+                positions = data["positions"]
                 total_positions = sum(
-                    float(item.get('market_value', 0))
+                    float(item.get("market_value", 0))
                     for item in positions
-                    if item.get('market_value')
+                    if item.get("market_value")
                 )
-                validation_result['total_positions'] = total_positions
-                self.data_statistics['total_positions'] = total_positions
+                validation_result["total_positions"] = total_positions
+                self.data_statistics["total_positions"] = total_positions
 
             # 데이터 일관성 검증
-            if validation_result['total_assets'] > 0 and validation_result['total_positions'] > 0:
-                difference = abs(validation_result['total_assets'] - validation_result['total_positions'])
+            if (
+                validation_result["total_assets"] > 0
+                and validation_result["total_positions"] > 0
+            ):
+                difference = abs(
+                    validation_result["total_assets"]
+                    - validation_result["total_positions"]
+                )
                 if difference > 1000:  # 1000원 이상 차이나면 경고
-                    validation_result['warnings'].append(
+                    validation_result["warnings"].append(
                         f"잔고와 포지션 총액 차이: {difference:,.0f}원"
                     )
 
             # 마지막 업데이트 시간 기록
-            self.data_statistics['last_updated'] = datetime.now()
+            self.data_statistics["last_updated"] = datetime.now()
 
         except Exception as e:
-            validation_result['status'] = 'error'
-            validation_result['errors'].append(f"데이터 검증 오류: {e}")
+            validation_result["status"] = "error"
+            validation_result["errors"].append(f"데이터 검증 오류: {e}")
 
         return validation_result
 

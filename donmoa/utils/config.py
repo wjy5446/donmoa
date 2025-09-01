@@ -1,11 +1,14 @@
 """
 설정 관리 유틸리티 모듈
 """
+
 import os
-import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
+
+import yaml
 from dotenv import load_dotenv
+
 from .logger import get_logger
 
 logger = get_logger(__name__)
@@ -14,7 +17,11 @@ logger = get_logger(__name__)
 class ConfigManager:
     """설정 파일 및 환경 변수 관리 클래스"""
 
-    def __init__(self, config_path: Optional[Path] = None, env_path: Optional[Path] = None):
+    def __init__(
+        self,
+        config_path: Optional[Path] = None,
+        env_path: Optional[Path] = None,
+    ):
         """
         ConfigManager 초기화
 
@@ -46,7 +53,7 @@ class ConfigManager:
         """설정 파일을 로드합니다."""
         if self.config_path.exists():
             try:
-                with open(self.config_path, 'r', encoding='utf-8') as f:
+                with open(self.config_path, "r", encoding="utf-8") as f:
                     config = yaml.safe_load(f)
                     logger.info(f"설정 파일 로드 완료: {self.config_path}")
                     return config or {}
@@ -60,44 +67,38 @@ class ConfigManager:
     def _set_defaults(self) -> None:
         """기본 설정값을 설정합니다."""
         defaults = {
-            'schedule': {
-                'enabled': True,
-                'interval_hours': 24,
-                'start_time': '09:00'
+            "schedule": {
+                "enabled": True,
+                "interval_hours": 24,
+                "start_time": "09:00"
             },
-            'export': {
-                'output_dir': './export',
-                'file_format': 'csv',
-                'encoding': 'utf-8'
+            "export": {
+                "output_dir": "./export",
+                "file_format": "csv",
+                "encoding": "utf-8",
             },
-            'providers': {
-                'securities': {
-                    'enabled': True,
-                    'retry_count': 3,
-                    'timeout': 30
+            "providers": {
+                "securities": {
+                    "enabled": True,
+                    "retry_count": 3,
+                    "timeout": 30
                 },
-                'bank': {
-                    'enabled': True,
-                    'retry_count': 3,
-                    'timeout': 30
-                },
-                'exchange': {
-                    'enabled': True,
-                    'retry_count': 3,
-                    'timeout': 30
-                }
+                "bank": {"enabled": True, "retry_count": 3, "timeout": 30},
+                "exchange": {"enabled": True, "retry_count": 3, "timeout": 30},
             },
-            'logging': {
-                'level': 'INFO',
-                'file': './logs/donmoa.log',
-                'console': True
-            }
+            "logging": {
+                "level": "INFO",
+                "file": "./logs/donmoa.log",
+                "console": True
+            },
         }
 
         # 기본값과 사용자 설정 병합
         self._merge_configs(defaults, self.config)
 
-    def _merge_configs(self, defaults: Dict[str, Any], user_config: Dict[str, Any]) -> None:
+    def _merge_configs(
+        self, defaults: Dict[str, Any], user_config: Dict[str, Any]
+    ) -> None:
         """기본 설정과 사용자 설정을 병합합니다."""
         for key, default_value in defaults.items():
             if key not in user_config:
@@ -116,7 +117,7 @@ class ConfigManager:
         Returns:
             설정값 또는 기본값
         """
-        keys = key.split('.')
+        keys = key.split(".")
         value = self.config
 
         try:
@@ -145,7 +146,7 @@ class ConfigManager:
             # 설정 디렉토리 생성
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(self.config_path, 'w', encoding='utf-8') as f:
+            with open(self.config_path, "w", encoding="utf-8") as f:
                 yaml.dump(self.config, f, default_flow_style=False, allow_unicode=True)
 
             logger.info(f"설정 파일 저장 완료: {self.config_path}")
@@ -160,7 +161,7 @@ class ConfigManager:
             key: 설정 키 (점 표기법 지원)
             value: 새로운 값
         """
-        keys = key.split('.')
+        keys = key.split(".")
         config = self.config
 
         # 마지막 키 전까지 탐색
@@ -194,16 +195,20 @@ class ConfigManager:
             # 메인 설정에서 Provider 설정 파일 경로 가져오기
             provider_config_path = self.get(f"providers.{provider_name}")
             if not provider_config_path:
-                logger.warning(f"Provider '{provider_name}' 설정 파일 경로를 찾을 수 없습니다")
+                logger.warning(
+                    f"Provider '{provider_name}' 설정 파일 경로를 찾을 수 없습니다"
+                )
                 return {}
 
             # Provider 설정 파일 로드
             provider_config_file = Path(provider_config_path)
             if not provider_config_file.exists():
-                logger.warning(f"Provider '{provider_name}' 설정 파일을 찾을 수 없습니다: {provider_config_path}")
+                logger.warning(
+                    f"Provider '{provider_name}' 설정 파일을 찾을 수 없습니다: {provider_config_path}"
+                )
                 return {}
 
-            with open(provider_config_file, 'r', encoding='utf-8') as f:
+            with open(provider_config_file, "r", encoding="utf-8") as f:
                 provider_config = yaml.safe_load(f)
                 logger.info(f"Provider '{provider_name}' 설정 로드 완료")
                 return provider_config or {}
@@ -222,7 +227,7 @@ class ConfigManager:
         provider_configs = {}
 
         # 메인 설정에서 Provider 목록 가져오기
-        providers = self.get('providers', {})
+        providers = self.get("providers", {})
 
         for provider_name in providers.keys():
             provider_config = self.get_provider_config(provider_name)
@@ -238,7 +243,7 @@ class ConfigManager:
         Returns:
             통합 계좌명 리스트
         """
-        return self.get('unified_accounts', [])
+        return self.get("unified_accounts", [])
 
     def get_account_mapping_for_provider(self, provider_name: str) -> Dict[str, str]:
         """
@@ -251,7 +256,7 @@ class ConfigManager:
             계좌 매핑 (통합 계좌명: 원본 계좌명)
         """
         provider_config = self.get_provider_config(provider_name)
-        return provider_config.get('account_mapping', {})
+        return provider_config.get("account_mapping", {})
 
 
 # 전역 설정 관리자 인스턴스

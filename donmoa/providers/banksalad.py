@@ -1,12 +1,15 @@
 """
 뱅크샐러드 Excel/CSV 파싱 기반 은행/증권 잔고 Provider
 """
-from pathlib import Path
-from typing import Dict, List, Any, Optional
+
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
-from .base import BaseProvider
+
 from ..utils.logger import logger
+from .base import BaseProvider
 
 
 class BanksaladProvider(BaseProvider):
@@ -22,15 +25,18 @@ class BanksaladProvider(BaseProvider):
     def _load_provider_config(self) -> Dict[str, Any]:
         """Provider 설정을 로드합니다."""
         from ..utils.config import config_manager
+
         return config_manager.get_provider_config("banksalad_csv")
 
     def get_file_patterns(self) -> Dict[str, str]:
         """파일 패턴을 가져옵니다."""
-        return self.provider_config.get('manual_files', {}).get('file_patterns', {})
+        return self.provider_config.get("manual_files", {}).get(
+            "file_patterns", {}
+        )
 
     def get_account_mapping(self) -> Dict[str, str]:
         """계좌 매핑을 가져옵니다."""
-        return self.provider_config.get('account_mapping', {})
+        return self.provider_config.get("account_mapping", {})
 
     def download_data(self, output_dir: Path) -> Dict[str, Path]:
         """
@@ -48,21 +54,28 @@ class BanksaladProvider(BaseProvider):
         logger.info(f"{self.name} 수동 파일 사용")
         file_patterns = self.get_file_patterns()
 
-        for data_type in ['balances', 'transactions']:
+        for data_type in ["balances", "transactions"]:
             if data_type in file_patterns:
                 pattern = file_patterns[data_type]
-                manual_file = self._find_manual_file(output_dir, data_type, pattern)
+                manual_file = self._find_manual_file(
+                    output_dir, data_type, pattern
+                )
                 if manual_file:
                     downloaded_files[data_type] = manual_file
 
         if downloaded_files:
-            logger.info(f"{self.name} Excel/CSV 파일 준비 완료: {len(downloaded_files)}개")
+            logger.info(
+                f"{self.name} Excel/CSV 파일 준비 완료: "
+                f"{len(downloaded_files)}개"
+            )
         else:
             logger.warning(f"{self.name} Excel/CSV 파일을 찾을 수 없습니다")
 
         return downloaded_files
 
-    def _find_manual_file(self, directory: Path, data_type: str, pattern: str) -> Optional[Path]:
+    def _find_manual_file(
+        self, directory: Path, data_type: str, pattern: str
+    ) -> Optional[Path]:
         """수동으로 다운로드한 파일을 찾습니다."""
         try:
             matching_files = list(directory.glob(pattern))
@@ -76,7 +89,9 @@ class BanksaladProvider(BaseProvider):
 
         return None
 
-    def parse_data(self, file_paths: Dict[str, Path]) -> Dict[str, List[Dict[str, Any]]]:
+    def parse_data(
+        self, file_paths: Dict[str, Path]
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Excel/CSV 파일을 파싱하여 구조화된 데이터로 변환합니다.
 
@@ -90,18 +105,20 @@ class BanksaladProvider(BaseProvider):
 
         try:
             # 잔고 정보 파싱
-            if 'balances' in file_paths and file_paths['balances'].exists():
-                balances = self._parse_balances(file_paths['balances'])
+            if "balances" in file_paths and file_paths["balances"].exists():
+                balances = self._parse_balances(file_paths["balances"])
                 if balances:
-                    parsed_data['balances'] = balances
+                    parsed_data["balances"] = balances
                     logger.info(f"{self.name} 잔고 파싱 완료: {len(balances)}건")
 
             # 거래 내역 파싱
-            if 'transactions' in file_paths and file_paths['transactions'].exists():
-                transactions = self._parse_transactions(file_paths['transactions'])
+            if "transactions" in file_paths and file_paths["transactions"].exists():
+                transactions = self._parse_transactions(file_paths["transactions"])
                 if transactions:
-                    parsed_data['transactions'] = transactions
-                    logger.info(f"{self.name} 거래내역 파싱 완료: {len(transactions)}건")
+                    parsed_data["transactions"] = transactions
+                    logger.info(
+                        f"{self.name} 거래내역 파싱 완료: {len(transactions)}건"
+                    )
 
         except Exception as e:
             logger.error(f"{self.name} CSV 파싱 오류: {e}")
@@ -113,7 +130,7 @@ class BanksaladProvider(BaseProvider):
         try:
             file_ext = file_path.suffix.lower()
 
-            if file_ext in ['.xlsx', '.xls']:
+            if file_ext in [".xlsx", ".xls"]:
                 # Excel 파일 읽기
                 excel_data = pd.read_excel(file_path, sheet_name=None)
                 logger.info(f"잔고 Excel 파일 읽기 완료: {len(excel_data)}개 시트")
@@ -126,11 +143,11 @@ class BanksaladProvider(BaseProvider):
 
                 return balances
 
-            elif file_ext == '.csv':
+            elif file_ext == ".csv":
                 # CSV 파일 읽기
-                df = pd.read_csv(file_path, encoding='utf-8')
+                df = pd.read_csv(file_path, encoding="utf-8")
                 logger.info(f"잔고 CSV 파일 읽기 완료: {len(df)}행")
-                return self._parse_balance_sheet(df, 'main')
+                return self._parse_balance_sheet(df, "main")
 
             else:
                 logger.error(f"지원하지 않는 파일 형식: {file_ext}")
@@ -140,38 +157,42 @@ class BanksaladProvider(BaseProvider):
             logger.error(f"잔고 파일 파싱 실패: {e}")
             return []
 
-    def _parse_balance_sheet(self, df: pd.DataFrame, sheet_name: str) -> List[Dict[str, Any]]:
+    def _parse_balance_sheet(
+        self, df: pd.DataFrame, sheet_name: str
+    ) -> List[Dict[str, Any]]:
         """잔고 시트/DataFrame을 파싱합니다."""
         try:
             balances = []
             for _, row in df.iterrows():
                 try:
                     # 계좌 정보 추출
-                    account = row.get('계좌명', row.get('account', ''))
-                    institution = row.get('기관명', row.get('institution', ''))
-                    balance_text = row.get('잔액', row.get('balance', '0'))
-                    account_type = row.get('계좌구분', row.get('account_type', ''))
+                    account = row.get("계좌명", row.get("account", ""))
+                    institution = row.get("기관명", row.get("institution", ""))
+                    balance_text = row.get("잔액", row.get("balance", "0"))
+                    account_type = row.get("계좌구분", row.get("account_type", ""))
 
                     # 숫자 변환
                     balance = self._convert_to_number(balance_text)
 
                     # 통화 정보
-                    currency = 'KRW'  # 기본값
-                    if 'currency' in row:
-                        currency = row['currency']
-                    elif '통화' in row:
-                        currency = row['통화']
+                    currency = "KRW"  # 기본값
+                    if "currency" in row:
+                        currency = row["currency"]
+                    elif "통화" in row:
+                        currency = row["통화"]
 
-                    balances.append({
-                        'account': account,
-                        'institution': institution,
-                        'balance': balance,
-                        'account_type': account_type,
-                        'currency': currency,
-                        'sheet_name': sheet_name,
-                        'provider': self.name,
-                        'parsed_at': datetime.now().isoformat()
-                    })
+                    balances.append(
+                        {
+                            "account": account,
+                            "institution": institution,
+                            "balance": balance,
+                            "account_type": account_type,
+                            "currency": currency,
+                            "sheet_name": sheet_name,
+                            "provider": self.name,
+                            "parsed_at": datetime.now().isoformat(),
+                        }
+                    )
 
                 except Exception as e:
                     logger.warning(f"잔고 항목 파싱 실패: {e}")
@@ -188,7 +209,7 @@ class BanksaladProvider(BaseProvider):
         try:
             file_ext = file_path.suffix.lower()
 
-            if file_ext in ['.xlsx', '.xls']:
+            if file_ext in [".xlsx", ".xls"]:
                 # Excel 파일 읽기
                 excel_data = pd.read_excel(file_path, sheet_name=None)
                 logger.info(f"거래내역 Excel 파일 읽기 완료: {len(excel_data)}개 시트")
@@ -201,11 +222,11 @@ class BanksaladProvider(BaseProvider):
 
                 return transactions
 
-            elif file_ext == '.csv':
+            elif file_ext == ".csv":
                 # CSV 파일 읽기
-                df = pd.read_csv(file_path, encoding='utf-8')
+                df = pd.read_csv(file_path, encoding="utf-8")
                 logger.info(f"거래내역 CSV 파일 읽기 완료: {len(df)}행")
-                return self._parse_transaction_sheet(df, 'main')
+                return self._parse_transaction_sheet(df, "main")
 
             else:
                 logger.error(f"지원하지 않는 파일 형식: {file_ext}")
@@ -215,7 +236,9 @@ class BanksaladProvider(BaseProvider):
             logger.error(f"거래내역 파일 파싱 실패: {e}")
             return []
 
-    def _parse_transaction_sheet(self, df: pd.DataFrame, sheet_name: str) -> List[Dict[str, Any]]:
+    def _parse_transaction_sheet(
+        self, df: pd.DataFrame, sheet_name: str
+    ) -> List[Dict[str, Any]]:
         """거래 내역 시트/DataFrame을 파싱합니다."""
         try:
             transactions = []
@@ -225,12 +248,12 @@ class BanksaladProvider(BaseProvider):
             for _, row in df.iterrows():
                 try:
                     # 거래 정보 추출
-                    date_text = row.get('거래일자', row.get('date', ''))
-                    time_text = row.get('거래시간', row.get('time', ''))
-                    description = row.get('내용', row.get('description', ''))
-                    amount_text = row.get('금액', row.get('amount', '0'))
-                    balance_text = row.get('잔액', row.get('balance', '0'))
-                    account = row.get('계좌명', row.get('account', ''))
+                    date_text = row.get("거래일자", row.get("date", ""))
+                    time_text = row.get("거래시간", row.get("time", ""))
+                    description = row.get("내용", row.get("description", ""))
+                    amount_text = row.get("금액", row.get("amount", "0"))
+                    balance_text = row.get("잔액", row.get("balance", "0"))
+                    account = row.get("계좌명", row.get("account", ""))
 
                     # 날짜 파싱
                     date = self._parse_date(date_text)
@@ -240,21 +263,25 @@ class BanksaladProvider(BaseProvider):
                     balance = self._convert_to_number(balance_text)
 
                     # 거래 유형 판별
-                    transaction_type = self._determine_transaction_type(description, amount)
+                    transaction_type = self._determine_transaction_type(
+                        description, amount
+                    )
 
-                    transactions.append({
-                        'date': date.strftime('%Y-%m-%d'),
-                        'time': time_text,
-                        'description': description,
-                        'type': transaction_type,
-                        'amount': amount,
-                        'balance': balance,
-                        'account': account,
-                        'currency': 'KRW',
-                        'sheet_name': sheet_name,
-                        'provider': self.name,
-                        'parsed_at': datetime.now().isoformat()
-                    })
+                    transactions.append(
+                        {
+                            "date": date.strftime("%Y-%m-%d"),
+                            "time": time_text,
+                            "description": description,
+                            "type": transaction_type,
+                            "amount": amount,
+                            "balance": balance,
+                            "account": account,
+                            "currency": "KRW",
+                            "sheet_name": sheet_name,
+                            "provider": self.name,
+                            "parsed_at": datetime.now().isoformat(),
+                        }
+                    )
 
                 except Exception as e:
                     logger.warning(f"거래내역 항목 파싱 실패: {e}")
@@ -278,7 +305,9 @@ class BanksaladProvider(BaseProvider):
             # 문자열인 경우 숫자 추출
             if isinstance(value, str):
                 # 쉼표, 원화 기호, 공백 제거
-                cleaned = value.replace(',', '').replace('원', '').replace('₩', '').strip()
+                cleaned = (
+                    value.replace(",", "").replace("원", "").replace("₩", "").strip()
+                )
                 return float(cleaned) if cleaned else 0.0
 
             return 0.0
@@ -298,7 +327,7 @@ class BanksaladProvider(BaseProvider):
             # 문자열인 경우 파싱
             if isinstance(date_text, str):
                 # 다양한 날짜 형식 지원
-                formats = ['%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d', '%m/%d/%Y', '%Y%m%d']
+                formats = ["%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%m/%d/%Y", "%Y%m%d"]
 
                 for fmt in formats:
                     try:
@@ -319,25 +348,35 @@ class BanksaladProvider(BaseProvider):
         description_lower = description.lower()
 
         # 입금 관련
-        if any(keyword in description_lower for keyword in ['입금', '입금', '급여', '월급', '월급여']):
-            return '입금'
+        if any(
+            keyword in description_lower
+            for keyword in ["입금", "입금", "급여", "월급", "월급여"]
+        ):
+            return "입금"
 
         # 출금 관련
-        if any(keyword in description_lower for keyword in ['출금', '출금', '이체', '송금', '결제']):
-            return '출금'
+        if any(
+            keyword in description_lower
+            for keyword in ["출금", "출금", "이체", "송금", "결제"]
+        ):
+            return "출금"
 
         # 이자 관련
-        if any(keyword in description_lower for keyword in ['이자', '이자수익', '이자지급']):
-            return '이자'
+        if any(
+            keyword in description_lower for keyword in ["이자", "이자수익", "이자지급"]
+        ):
+            return "이자"
 
         # 수수료 관련
-        if any(keyword in description_lower for keyword in ['수수료', '관리비', '서비스비']):
-            return '수수료'
+        if any(
+            keyword in description_lower for keyword in ["수수료", "관리비", "서비스비"]
+        ):
+            return "수수료"
 
         # 기본값: 금액 기반 판별
         if amount > 0:
-            return '입금'
+            return "입금"
         elif amount < 0:
-            return '출금'
+            return "출금"
         else:
-            return '기타'
+            return "기타"

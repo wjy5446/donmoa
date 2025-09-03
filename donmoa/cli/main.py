@@ -115,7 +115,7 @@ def collect(ctx, provider, output_dir, save_result, validate):
                 if not validation_result["is_valid"]:
                     console.print(
                         f"[yellow]데이터 유효성 검증 경고: "
-                    f"{validation_result['warnings']}[/yellow]"
+                        f"{validation_result['warnings']}[/yellow]"
                     )
 
             progress.update(task, description="완료!")
@@ -261,6 +261,57 @@ def export(ctx, output_dir):
 
 
 @cli.command()
+@click.option("--provider", "-p", help="특정 Provider만 수집")
+@click.option("--output-dir", "-o", type=click.Path(), help="CSV 출력 디렉토리")
+@click.pass_context
+def export(ctx, provider, output_dir):
+    """donmoa 형태의 CSV 파일을 생성합니다 (position.csv, cash.csv)."""
+    donmoa = ctx.obj
+
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            # 데이터 수집
+            task = progress.add_task("데이터 수집 중...", total=None)
+
+            if provider:
+                # 특정 Provider만 수집
+                if provider not in donmoa.list_providers():
+                    console.print(
+                        f"[red]Provider '{provider}'를 찾을 수 없습니다[/red]"
+                    )
+                    return
+
+                collected_data = donmoa.collect_data([provider])
+            else:
+                # 전체 데이터 수집
+                collected_data = donmoa.collect_all_data()
+
+            progress.update(task, description="donmoa 형태 CSV 내보내기 중...")
+
+            # donmoa 형태의 CSV 내보내기
+            exported_files = donmoa.export_donmoa_format_csv(
+                collected_data, output_dir=output_dir
+            )
+
+            progress.update(task, description="완료!")
+
+        # 결과 출력
+        console.print("\n[bold green]donmoa 형태 CSV 내보내기 완료![/bold green]")
+        console.print(f"생성된 파일: {len(exported_files)}개")
+
+        for file_type, file_path in exported_files.items():
+            console.print(f"  - {file_type}: {file_path}")
+
+    except Exception as e:
+        console.print(f"[red]donmoa 형태 CSV 내보내기 실패: {e}[/red]")
+        raise click.Abort()
+
+
+@cli.command()
 @click.pass_context
 def config(ctx):
     """현재 설정을 확인합니다."""
@@ -389,7 +440,7 @@ def _display_collection_results(donmoa, collected_data, exported_files):
     # 수집 요약
     summary = donmoa.data_collector.get_collection_summary()
 
-    console.print(f"\n[bold green]데이터 수집 완료![/bold green]")
+    console.print("\n[bold green]데이터 수집 완료![/bold green]")
     console.print(f"총 Provider: {summary['total_providers']}개")
     console.print(f"성공: {summary['successful_providers']}개")
     console.print(f"실패: {summary['failed_providers']}개")
@@ -398,7 +449,7 @@ def _display_collection_results(donmoa, collected_data, exported_files):
     console.print(f"평균 수집 시간: {summary['average_collection_time']:.2f}초")
 
     # CSV 파일 정보
-    console.print(f"\n[bold cyan]생성된 CSV 파일:[/bold cyan]")
+    console.print("\n[bold cyan]생성된 CSV 파일:[/bold cyan]")
     for file_type, file_path in exported_files.items():
         if file_type != "summary":
             console.print(f"  - {file_type}: {file_path}")

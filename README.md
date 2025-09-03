@@ -40,7 +40,10 @@ pip install -r requirements.txt
 python -m donmoa collect
 
 # 특정 Provider만 수집
-python -m donmoa collect --provider banksalad
+python -m donmoa collect --provider domino
+
+# donmoa 형태 CSV 내보내기 (position.csv, cash.csv)
+python -m donmoa export --provider domino
 
 # 시스템 상태 확인
 python -m donmoa status
@@ -101,6 +104,68 @@ cp config/env.example config/.env
 vim config/.env
 ```
 
+## 🔌 Provider 정보
+
+### Domino Provider (도미노 증권)
+
+Domino Provider는 도미노 증권의 MHTML 파일에서 포트폴리오 데이터를 추출합니다.
+
+#### 지원 데이터
+- **포지션 데이터**: 계좌별 자산 보유량 (주식, ETF, 펀드 등)
+- **현금 데이터**: 원화, 달러, 엔화 등 통화별 현금 보유량
+
+#### 입력 파일
+- **파일 형식**: MHTML (.mhtml)
+- **파일 위치**: `data/input/domino.mhtml`
+- **데이터 소스**: 도미노 증권 웹사이트에서 다운로드한 포트폴리오 페이지
+
+#### 출력 데이터
+
+**position.csv** (계좌별 자산 보유량):
+```csv
+계좌명,자산명,티커,보유량,평단가,수행일시
+위탁종합,팔란티어,PLTR,8.0,225902.0,20250903_224820
+중개형ISA,TIGER 미국초단기국채,0046A0,1629.0,9635.0,20250903_224820
+```
+
+**cash.csv** (현금 보유량):
+```csv
+자산명,보유량,수행일시
+원,2467838.0,20250903_224820
+달러,3306.93,20250903_224820
+엔,22055.0,20250903_224820
+```
+
+#### 파일 구조
+```
+data/export/
+└── 20250903/          # 수행날짜 폴더 (YYYYMMDD)
+    ├── position.csv   # 계좌별 자산 보유량
+    └── cash.csv       # 현금 보유량
+```
+
+#### 사용 방법
+```bash
+# domino Provider로 donmoa 형태 CSV 내보내기
+python -m donmoa export --provider domino
+
+# 전체 Provider 데이터 수집 및 내보내기
+python -m donmoa export
+```
+
+### Banksalad Provider (뱅크샐러드)
+
+Banksalad Provider는 뱅크샐러드 Excel 파일에서 계좌 데이터를 추출합니다.
+
+#### 지원 데이터
+- **계좌 잔고**: 은행, 증권사 계좌별 잔고 정보
+- **거래 내역**: 입출금, 이체 등 거래 기록
+
+#### 입력 파일
+- **파일 형식**: Excel (.xlsx)
+- **파일 위치**: `data/input/banksalad.xlsx`
+- **데이터 소스**: 뱅크샐러드에서 내보낸 Excel 파일
+
 ## 📖 사용 방법
 
 ### CLI 사용
@@ -110,13 +175,16 @@ vim config/.env
 python -m donmoa collect
 
 # 특정 Provider만 수집
-python -m donmoa collect --provider banksalad
+python -m donmoa collect --provider domino
+
+# donmoa 형태 CSV 내보내기 (position.csv, cash.csv)
+python -m donmoa export --provider domino
 
 # 상태 확인
 python -m donmoa status
 
 # Provider 연결 테스트
-python -m donmoa test --provider banksalad
+python -m donmoa test --provider domino
 
 # 설정 확인
 python -m donmoa config

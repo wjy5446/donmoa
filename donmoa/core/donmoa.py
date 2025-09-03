@@ -49,6 +49,9 @@ class Donmoa(LoggerMixin):
         # 설정 파일에서 계좌 매핑 로드
         self._load_account_mappings()
 
+        # 기본 Provider 등록
+        self._register_default_providers()
+
         self.logger.info("Donmoa 초기화 완료")
 
     def _load_account_mappings(self) -> None:
@@ -60,6 +63,20 @@ class Donmoa(LoggerMixin):
             )
         except Exception as e:
             self.logger.warning(f"계좌 매핑 로드 실패: {e}")
+
+    def _register_default_providers(self) -> None:
+        """기본 Provider들을 등록합니다."""
+        try:
+            from ..providers.domino import DominoProvider
+
+            # 도미노 Provider 등록
+            domino_provider = DominoProvider("domino")
+            self.add_provider(domino_provider)
+
+            self.logger.info("기본 Provider 등록 완료")
+
+        except Exception as e:
+            self.logger.warning(f"기본 Provider 등록 실패: {e}")
 
     def _setup_logging(self) -> None:
         """로깅 설정을 적용합니다."""
@@ -308,6 +325,38 @@ class Donmoa(LoggerMixin):
         except Exception as e:
             self.logger.error(f"CSV 내보내기 실패: {e}")
             raise
+
+    def export_donmoa_format_csv(
+        self,
+        collected_data: Optional[Dict[str, Dict[str, List[Dict[str, Any]]]]] = None,
+        output_dir: Optional[Path] = None,
+    ) -> Dict[str, Path]:
+        """
+        donmoa 형태의 CSV 파일을 내보냅니다.
+        (position.csv와 cash.csv 형태)
+
+        Args:
+            collected_data: 수집된 데이터 (None이면 최근 수집 데이터 사용)
+            output_dir: 출력 디렉토리
+
+        Returns:
+            생성된 CSV 파일 경로들
+        """
+        if collected_data is None:
+            if not self.last_run_result:
+                raise ValueError("수집된 데이터가 없습니다. 먼저 데이터를 수집해주세요.")
+            collected_data = self.last_run_result.get("collected_data", {})
+
+        # CSV 내보내기 디렉토리 설정
+        if output_dir:
+            self.csv_exporter.output_dir = Path(output_dir)
+            self.csv_exporter.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # donmoa 형태의 CSV 내보내기
+        exported_files = self.csv_exporter.export_donmoa_format_csv(collected_data)
+
+        self.logger.info(f"donmoa 형태 CSV 내보내기 완료: {len(exported_files)}개 파일")
+        return exported_files
 
     def run_full_workflow(
         self,

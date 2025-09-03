@@ -5,7 +5,7 @@ CSV 내보내기 기능 모듈
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
@@ -367,3 +367,91 @@ class CSVExporter(LoggerMixin):
         stats["total_size_mb"] = round(stats["total_size_bytes"] / (1024 * 1024), 2)
 
         return stats
+
+    def export_donmoa_format_csv(
+        self,
+        collected_data: Dict[str, Dict[str, List[Dict[str, Any]]]],
+        timestamp: Optional[datetime] = None,
+    ) -> Dict[str, Path]:
+        """
+        donmoa 형태의 CSV 파일을 내보냅니다.
+        (position.csv와 cash.csv 형태)
+
+        Args:
+            collected_data: 수집된 데이터
+            timestamp: 내보내기 타임스탬프 (None이면 현재 시간)
+
+        Returns:
+            생성된 CSV 파일 경로들
+        """
+        if timestamp is None:
+            timestamp = datetime.now()
+
+        timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
+        date_str = timestamp.strftime("%Y%m%d")
+        exported_files = {}
+
+        # 날짜별 폴더 생성
+        date_dir = self.output_dir / date_str
+        date_dir.mkdir(exist_ok=True)
+
+        # position.csv 생성 (계좌별 자산 보유량)
+        position_data = []
+        for provider_name, provider_data in collected_data.items():
+            if "positions" in provider_data and provider_data["positions"]:
+                for item in provider_data["positions"]:
+                    position_data.append({
+                        '계좌명': item.get('account', ''),
+                        '자산명': item.get('symbol_name', ''),
+                        '티커': item.get('symbol', ''),
+                        '보유량': item.get('quantity', 0),
+                        '평단가': item.get('average_price', 0),
+                        '수행일시': timestamp_str
+                    })
+
+        if position_data:
+            # DataFrame 생성
+            df_position = pd.DataFrame(position_data)
+
+            # CSV 파일명 생성
+            filename = "position.csv"
+            file_path = date_dir / filename
+
+            # CSV 파일로 저장
+            df_position.to_csv(file_path, index=False, encoding='utf-8-sig')
+
+            exported_files["position"] = file_path
+            self.logger.info(
+                f"position CSV 내보내기 완료: {file_path} ({len(position_data)}건)"
+            )
+
+        # cash.csv 생성 (현금 보유량)
+        cash_data = []
+        for provider_name, provider_data in collected_data.items():
+            if "balances" in provider_data and provider_data["balances"]:
+                for item in provider_data["balances"]:
+                    # 현금성 자산만 필터링
+                    if '현금' in item.get('account', '') or item.get('currency', '') in ['원', '달러', '엔']:
+                        cash_data.append({
+                            '자산명': item.get('currency', ''),
+                            '보유량': item.get('balance', 0),
+                            '수행일시': timestamp_str
+                        })
+
+        if cash_data:
+            # DataFrame 생성
+            df_cash = pd.DataFrame(cash_data)
+
+            # CSV 파일명 생성
+            filename = "cash.csv"
+            file_path = date_dir / filename
+
+            # CSV 파일로 저장
+            df_cash.to_csv(file_path, index=False, encoding='utf-8-sig')
+
+            exported_files["cash"] = file_path
+            self.logger.info(
+                f"cash CSV 내보내기 완료: {file_path} ({len(cash_data)}건)"
+            )
+
+        return exported_files

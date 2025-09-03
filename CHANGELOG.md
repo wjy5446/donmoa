@@ -8,22 +8,29 @@
 ## [Unreleased]
 
 ### Added
-- 새로운 기능이나 추가된 내용
+- **Domino Provider**: 도미노 증권 MHTML 파일 파싱 지원
+  - 포지션 데이터 추출 (계좌별 자산 보유량)
+  - 현금 데이터 추출 (원화, 달러, 엔화)
+  - MHTML 파일에서 HTML 파싱 및 데이터 추출
+- **donmoa 형태 CSV 내보내기**: `export` 명령 추가
+  - `position.csv`: 계좌명, 자산명, 티커, 보유량, 평단가, 수행일시
+  - `cash.csv`: 자산명, 보유량, 수행일시
+- **날짜별 폴더 구조**: `data/export/{YYYYMMDD}/` 폴더에 CSV 파일 저장
+- **자동 Provider 등록**: 기본 Provider 자동 등록 기능
 
 ### Changed
-- 기존 기능의 변경사항
-
-### Deprecated
-- 곧 제거될 기능
+- **Provider 이름**: `domino_securities` → `domino`로 단순화
+- **파일명 구조**: 타임스탬프 포함 파일명 → 날짜별 폴더 + 단순 파일명
+- **설정 파일**: `config/config.yaml`에서 Provider 이름 통일
 
 ### Removed
-- 제거된 기능
+- **scripts/analyze_domino_mhtml.py**: 독립 스크립트 → donmoa Provider로 통합
+- **domino_positions.csv**: 불필요한 중간 파일 제거
 
 ### Fixed
-- 버그 수정
-
-### Security
-- 보안 관련 수정사항
+- **설정 파일 로드**: Provider 설정 파일 경로 문제 해결
+- **데이터 파싱**: MHTML 파일에서 정확한 데이터 추출
+- **코드 정리**: 린터 오류 수정 및 코드 스타일 개선
 
 ## [0.1.0] - 2024-01-XX
 

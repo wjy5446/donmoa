@@ -239,10 +239,10 @@ class Donmoa(LoggerMixin):
         start_time = datetime.now()
         self.logger.info("데이터 수집 시작")
 
-        # 임시 디렉토리 설정
-        if temp_dir is None:
-            temp_dir = Path("./temp_data")
-        temp_dir.mkdir(exist_ok=True)
+        # 입력 디렉토리 설정 (data/input에서 파일 읽기)
+        input_dir = Path("data/input")
+        if not input_dir.exists():
+            input_dir.mkdir(parents=True, exist_ok=True)
 
         # 특정 Provider만 수집하는 경우
         if provider_names:
@@ -253,10 +253,12 @@ class Donmoa(LoggerMixin):
                 else:
                     self.logger.warning(f"Provider '{name}'를 찾을 수 없습니다")
 
-            collected_data = temp_collector.collect_all_data(temp_dir, use_async)
+            collected_dataframes = temp_collector.collect_all_dataframes(input_dir, use_async)
+            collected_data = self._convert_dataframes_to_legacy_format(collected_dataframes)
         else:
             # 모든 Provider에서 수집
-            collected_data = self.data_collector.collect_all_data(temp_dir, use_async)
+            collected_dataframes = self.data_collector.collect_all_dataframes(input_dir, use_async)
+            collected_data = self._convert_dataframes_to_legacy_format(collected_dataframes)
 
         collection_time = datetime.now() - start_time
         self.logger.info(f"데이터 수집 완료: {collection_time.total_seconds():.2f}초")
@@ -267,10 +269,38 @@ class Donmoa(LoggerMixin):
             "collection_time_seconds": collection_time.total_seconds(),
             "collected_data": collected_data,
             "collection_summary": self.data_collector.get_collection_summary(),
-            "data_statistics": self.data_collector.get_data_statistics(),
+            "data_statistics": self.data_collector.get_dataframe_statistics(),
         }
 
         return collected_data
+
+    def _convert_dataframes_to_legacy_format(
+        self, dataframes: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+        """
+        DataFrame을 기존 형식으로 변환합니다 (호환성을 위해).
+
+        Args:
+            dataframes: Provider별 DataFrame들
+
+        Returns:
+            기존 형식의 데이터
+        """
+        legacy_data = {}
+
+        for provider_name, provider_dataframes in dataframes.items():
+            legacy_provider_data = {}
+
+            for data_type, df in provider_dataframes.items():
+                if hasattr(df, 'to_dict'):  # DataFrame인 경우
+                    # DataFrame을 리스트로 변환
+                    legacy_provider_data[data_type] = df.to_dict('records')
+                else:
+                    legacy_provider_data[data_type] = df
+
+            legacy_data[provider_name] = legacy_provider_data
+
+        return legacy_data
 
     def export_to_csv(
         self,
@@ -279,6 +309,7 @@ class Donmoa(LoggerMixin):
         ] = None,
         output_dir: Optional[Path] = None,
         timestamp: Optional[datetime] = None,
+        subfolder: str = "all",
     ) -> Dict[str, Path]:
         """
         수집된 데이터를 CSV 파일로 내보냅니다.
@@ -306,7 +337,7 @@ class Donmoa(LoggerMixin):
         self.logger.info("CSV 내보내기 시작")
 
         try:
-            exported_files = self.csv_exporter.export_to_csv(collected_data, timestamp)
+            exported_files = self.csv_exporter.export_to_csv(collected_data, timestamp, subfolder)
 
             # 내보내기 통계 생성
             export_stats = self.csv_exporter.get_export_statistics(exported_files)
@@ -330,6 +361,7 @@ class Donmoa(LoggerMixin):
         self,
         collected_data: Optional[Dict[str, Dict[str, List[Dict[str, Any]]]]] = None,
         output_dir: Optional[Path] = None,
+        subfolder: str = None,
     ) -> Dict[str, Path]:
         """
         donmoa 형태의 CSV 파일을 내보냅니다.
@@ -353,7 +385,9 @@ class Donmoa(LoggerMixin):
             self.csv_exporter.output_dir.mkdir(parents=True, exist_ok=True)
 
         # donmoa 형태의 CSV 내보내기
-        exported_files = self.csv_exporter.export_donmoa_format_csv(collected_data)
+        if subfolder is None:
+            subfolder = "all"
+        exported_files = self.csv_exporter.export_donmoa_format_csv(collected_data, output_dir, subfolder)
 
         self.logger.info(f"donmoa 형태 CSV 내보내기 완료: {len(exported_files)}개 파일")
         return exported_files
@@ -385,14 +419,14 @@ class Donmoa(LoggerMixin):
             collected_data = self.collect_data(provider_names, use_async, temp_dir)
 
             # 2단계: 데이터 검증
-            validation_errors = self.data_collector.validate_collected_data()
+            validation_errors = self.data_collector.validate_collected_dataframes()
             if validation_errors:
                 self.logger.warning(
                     f"데이터 검증에서 {len(validation_errors)}개 오류 발견"
                 )
 
             # 3단계: 교차 검증 (도미노 vs 뱅크샐러드)
-            cross_validation = self.data_collector.validate_cross_provider_data()
+            cross_validation = self.data_collector.validate_cross_provider_dataframes()
             if cross_validation["status"] != "success":
                 self.logger.warning(f"교차 검증 결과: {cross_validation['status']}")
                 if cross_validation["warnings"]:
@@ -402,8 +436,8 @@ class Donmoa(LoggerMixin):
                     for error in cross_validation["errors"]:
                         self.logger.error(f"교차 검증 오류: {error}")
 
-            # 4단계: CSV 내보내기
-            exported_files = self.export_to_csv(collected_data, output_dir)
+            # 4단계: donmoa 형태 CSV 내보내기만
+            exported_files = self.export_donmoa_format_csv(collected_data, output_dir, "all")
 
             # 워크플로우 완료
             workflow_time = datetime.now() - workflow_start

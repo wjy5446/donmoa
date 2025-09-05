@@ -176,6 +176,7 @@ class CSVExporter(LoggerMixin):
         self,
         collected_data: Dict[str, Dict[str, List[Dict[str, Any]]]],
         timestamp: Optional[datetime] = None,
+        subfolder: str = "all",
     ) -> Dict[str, Path]:
         """
         수집된 데이터를 CSV 파일로 내보냅니다.
@@ -183,12 +184,18 @@ class CSVExporter(LoggerMixin):
         Args:
             collected_data: 수집된 데이터
             timestamp: 내보내기 타임스탬프 (None이면 현재 시간)
+            subfolder: 하위 폴더명 (all, domino 등)
 
         Returns:
             생성된 CSV 파일 경로들
         """
         if timestamp is None:
             timestamp = datetime.now()
+
+        # 날짜별 폴더 구조 생성
+        date_str = timestamp.strftime("%Y%m%d")
+        output_dir = self.output_dir / date_str / subfolder
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
         exported_files = {}
@@ -215,7 +222,7 @@ class CSVExporter(LoggerMixin):
 
                 # CSV 파일명 생성
                 filename = f"{data_type}_{timestamp_str}.csv"
-                file_path = self.output_dir / filename
+                file_path = output_dir / filename
 
                 # CSV 파일로 저장
                 df.to_csv(file_path, index=False, encoding=self.encoding)
@@ -231,7 +238,7 @@ class CSVExporter(LoggerMixin):
 
         # 내보내기 요약 파일 생성
         summary_file = self._create_export_summary(
-            collected_data, timestamp, exported_files
+            collected_data, timestamp, exported_files, output_dir
         )
         exported_files["summary"] = summary_file
 
@@ -242,6 +249,7 @@ class CSVExporter(LoggerMixin):
         collected_data: Dict[str, Dict[str, List[Dict[str, Any]]]],
         timestamp: datetime,
         exported_files: Dict[str, Path],
+        output_dir: Path,
     ) -> Path:
         """
         내보내기 요약 파일을 생성합니다.
@@ -273,7 +281,7 @@ class CSVExporter(LoggerMixin):
 
         # 요약 파일 저장
         summary_file = (
-            self.output_dir
+            output_dir
             / f"export_summary_{timestamp.strftime('%Y%m%d_%H%M%S')}.json"
         )
 
@@ -371,6 +379,8 @@ class CSVExporter(LoggerMixin):
     def export_donmoa_format_csv(
         self,
         collected_data: Dict[str, Dict[str, List[Dict[str, Any]]]],
+        output_dir: Optional[Path] = None,
+        subfolder: str = "all",
         timestamp: Optional[datetime] = None,
     ) -> Dict[str, Path]:
         """
@@ -387,13 +397,21 @@ class CSVExporter(LoggerMixin):
         if timestamp is None:
             timestamp = datetime.now()
 
+        # 출력 디렉토리 설정
+        if output_dir:
+            original_output_dir = self.output_dir
+            self.output_dir = Path(output_dir)
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+
         timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
         date_str = timestamp.strftime("%Y%m%d")
         exported_files = {}
 
         # 날짜별 폴더 생성
-        date_dir = self.output_dir / date_str
-        date_dir.mkdir(exist_ok=True)
+        if subfolder is None:
+            subfolder = "all"
+        date_dir = self.output_dir / date_str / subfolder
+        date_dir.mkdir(parents=True, exist_ok=True)
 
         # position.csv 생성 (계좌별 자산 보유량)
         position_data = []
@@ -453,5 +471,9 @@ class CSVExporter(LoggerMixin):
             self.logger.info(
                 f"cash CSV 내보내기 완료: {file_path} ({len(cash_data)}건)"
             )
+
+        # 출력 디렉토리 복원
+        if output_dir:
+            self.output_dir = original_output_dir
 
         return exported_files

@@ -186,7 +186,7 @@ pytest --lf
 
 ```python
 # donmoa/providers/new_provider.py
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from pathlib import Path
 import pandas as pd
 from .base import BaseProvider
@@ -194,21 +194,44 @@ from .base import BaseProvider
 class NewProvider(BaseProvider):
     """새로운 금융 기관 Provider"""
 
-    def __init__(self, name: str, config: Optional[Dict[str, Any]] = None):
-        super().__init__(name, config)
-        self.supported_formats = ['.xlsx', '.csv', '.pdf']
+    def __init__(self, name: str, credentials: Dict[str, str] = None):
+        super().__init__(name, "bank", credentials)
 
-    def collect_data(self, file_path: Path) -> Dict[str, pd.DataFrame]:
-        """데이터 수집 구현"""
-        # 여기에 실제 데이터 수집 로직 구현
+    def get_file_patterns(self) -> Dict[str, str]:
+        """지원하는 파일 패턴 반환"""
+        return {
+            "balances": "*.xlsx",
+            "transactions": "*.csv"
+        }
+
+    def parse_raw_data(self, file_paths: Dict[str, Path]) -> Dict[str, pd.DataFrame]:
+        """raw 데이터 파일을 pandas DataFrame으로 변환"""
+        dataframes = {}
+
+        # 잔고 데이터 파싱
+        if "balances" in file_paths:
+            balances_df = self._parse_balances_to_dataframe(file_paths["balances"])
+            if not balances_df.empty:
+                dataframes["balances"] = balances_df
+
+        # 거래 내역 파싱
+        if "transactions" in file_paths:
+            transactions_df = self._parse_transactions_to_dataframe(file_paths["transactions"])
+            if not transactions_df.empty:
+                dataframes["transactions"] = transactions_df
+
+        return dataframes
+
+    def _parse_balances_to_dataframe(self, file_path: Path) -> pd.DataFrame:
+        """잔고 데이터를 DataFrame으로 파싱"""
+        # 실제 파싱 로직 구현
+        # return pd.DataFrame(data)
         pass
 
-    def _parse_excel(self, file_path: Path) -> Dict[str, pd.DataFrame]:
-        """Excel 파일 파싱"""
-        pass
-
-    def _parse_csv(self, file_path: Path) -> Dict[str, pd.DataFrame]:
-        """CSV 파일 파싱"""
+    def _parse_transactions_to_dataframe(self, file_path: Path) -> pd.DataFrame:
+        """거래 내역을 DataFrame으로 파싱"""
+        # 실제 파싱 로직 구현
+        # return pd.DataFrame(data)
         pass
 ```
 
@@ -254,14 +277,23 @@ validation:
 ```python
 # donmoa/core/donmoa.py에 추가
 from ..providers.new_provider import NewProvider
+from ..core.data_collector import DataCollector
 
 def register_default_providers(self):
     """기본 Provider 등록"""
+    # DataCollector 생성
+    self.data_collector = DataCollector()
+
     # 기존 Provider들...
 
     # 새로운 Provider 추가
     new_provider = NewProvider("NewFinancial")
-    self.add_provider(new_provider)
+    self.data_collector.add_provider(new_provider)
+
+    # 데이터 수집 및 통합
+    input_dir = Path("data/input")
+    collected_dataframes = self.data_collector.collect_all_dataframes(input_dir)
+    integrated_dataframes = self.data_collector.integrate_dataframes()
 ```
 
 ## 🐛 디버깅 가이드

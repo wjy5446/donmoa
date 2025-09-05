@@ -4,16 +4,15 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 
-Donmoa는 다양한 금융 기관의 데이터를 통합하여 개인이 손쉽게 관리할 수 있도록 돕는 개인 자산 관리 도구입니다.
+Donmoa는 여러 금융 기관의 데이터를 통합하여 개인이 손쉽게 관리할 수 있도록 돕는 개인 자산 관리 도구입니다.
 
 ## ✨ 주요 기능
 
-- **다양한 데이터 소스 지원**: Excel, MHTML, CSV 등 다양한 형식의 금융 데이터 파싱
-- **Provider 기반 아키텍처**: 뱅크샐러드, 도미노 등 기관별 데이터 수집기
-- **통합 데이터 관리**: 여러 계좌의 데이터를 하나의 시스템에서 통합 관리
-- **CLI 인터페이스**: 명령줄에서 쉽게 사용할 수 있는 인터페이스
-- **Docker 지원**: 컨테이너화된 배포 환경 지원
-- **자동화된 워크플로우**: 데이터 수집부터 CSV 내보내기까지 자동화
+- **통합 데이터 관리**: 뱅크샐러드, 도미노 증권 등 여러 기관의 데이터를 하나로 통합
+- **자동화된 워크플로우**: 파일 업로드부터 CSV 내보내기까지 자동화
+- **CLI 인터페이스**: 명령줄에서 간편하게 사용
+- **Docker 지원**: 컨테이너화된 배포 환경
+- **pandas DataFrame 기반**: 효율적인 데이터 처리 및 분석
 
 ## 🚀 빠른 시작
 
@@ -36,99 +35,100 @@ pip install -r requirements.txt
 ### 기본 사용법
 
 ```bash
-# 데이터 수집 및 CSV 내보내기
+# 1. 데이터 파일 준비
+# data/input/ 폴더에 다음 파일들을 넣어주세요:
+# - domino.mhtml (도미노 증권 포트폴리오)
+# - banksalad.xlsx (뱅크샐러드 계좌 데이터)
+
+# 2. 데이터 수집 및 통합
 python -m donmoa collect
 
-# 특정 Provider만 수집
-python -m donmoa collect --provider domino
-
-# donmoa 형태 CSV 내보내기 (position.csv, cash.csv)
-python -m donmoa export --provider domino
-
-# 시스템 상태 확인
+# 3. 상태 확인
 python -m donmoa status
 
-# 도움말 보기
+# 4. 도움말 보기
 python -m donmoa --help
 ```
+
+## 🏗️ 아키텍처
+
+### 데이터 플로우
+```
+입력 파일 → Provider 파싱 → DataFrame 변환 → 데이터 통합 → CSV 내보내기
+```
+
+### 핵심 컴포넌트
+- **DominoProvider**: 도미노 증권 MHTML 파일 파싱
+- **BanksaladProvider**: 뱅크샐러드 Excel 파일 파싱
+- **DataCollector**: 여러 Provider 데이터 수집 및 통합
+- **CSVExporter**: 표준화된 CSV 파일 생성
 
 ## 📁 프로젝트 구조
 
 ```
 📁 donmoa/                    # 메인 패키지
-├── 📁 core/                  # 핵심 로직
-├── 📁 providers/             # Provider 구현
-├── 📁 utils/                 # 유틸리티
+├── 📁 core/                  # 핵심 로직 (Donmoa, DataCollector, CSVExporter)
+├── 📁 providers/             # Provider 구현 (Domino, Banksalad)
+├── 📁 utils/                 # 유틸리티 (Config, Logger)
 └── 📁 cli/                   # CLI 인터페이스
 
-📁 config/                    # 통합 설정 디렉토리
+📁 config/                    # 설정 파일
 ├── 📄 config.yaml            # 기본 설정
-├── 📄 deployment.yaml        # 배포 환경 설정
-├── 📄 env.example            # 환경 변수 예제
 └── 📁 providers/             # Provider별 설정
-    ├── banksalad.yaml
-    └── domino.yaml
 
 📁 data/                      # 데이터 디렉토리
-├── 📁 input/                 # 입력 파일 (Excel, MHTML 등)
-└── 📁 export/                # 출력 CSV 파일
-
-📁 tests/                     # 테스트 코드
-📁 logs/                      # 로그 파일
-📁 backups/                   # 백업 파일
+├── 📁 input/                 # 입력 파일 (domino.mhtml, banksalad.xlsx)
+└── 📁 export/                # 출력 CSV 파일 (position.csv, cash.csv)
 
 📄 requirements.txt            # Python 의존성
-📄 Dockerfile                 # Docker 이미지 정의
-📄 docker-compose.yml         # Docker Compose 설정
-📄 deploy.sh                  # 배포 스크립트
+📄 docker-compose.yml         # Docker 설정
 ```
 
 ## 🔧 설정
 
-### 설정 파일 구조
+### 기본 설정
+프로젝트는 `config/config.yaml`에서 기본 설정을 관리합니다:
 
-프로젝트는 `config/` 폴더에 모든 설정을 통합 관리합니다:
+```yaml
+# 통합 계좌 리스트
+unified_accounts:
+  - "주거래계좌"
+  - "주식투자계좌"
+  - "펀드투자계좌"
 
-- **`config/config.yaml`**: 기본 설정
-- **`config/deployment.yaml`**: 배포 환경 설정
-- **`config/env.example`**: 환경 변수 예제
-- **`config/providers/`**: Provider별 상세 설정
+# 내보내기 설정
+export:
+  output_dir: "./data/export"
+  encoding: "utf-8"
 
-### 환경 변수 설정
-
-```bash
-# 환경 변수 파일 생성
-cp config/env.example config/.env
-
-# .env 파일 편집
-vim config/.env
+# 로깅 설정
+logging:
+  level: "INFO"
+  file: "./logs/donmoa.log"
 ```
 
-## 🔌 Provider 정보
+## 🔌 지원 Provider
 
 ### Domino Provider (도미노 증권)
+- **입력**: `data/input/domino.mhtml` (도미노 증권 포트폴리오 페이지)
+- **출력**: `position.csv`, `cash.csv`
+- **데이터**: 계좌별 자산 보유량, 현금 보유량
 
-Domino Provider는 도미노 증권의 MHTML 파일에서 포트폴리오 데이터를 추출합니다.
+### Banksalad Provider (뱅크샐러드)
+- **입력**: `data/input/banksalad.xlsx` (뱅크샐러드 계좌 데이터)
+- **출력**: 계좌 잔고, 거래 내역
+- **데이터**: 은행/증권사 계좌별 잔고 정보
 
-#### 지원 데이터
-- **포지션 데이터**: 계좌별 자산 보유량 (주식, ETF, 펀드 등)
-- **현금 데이터**: 원화, 달러, 엔화 등 통화별 현금 보유량
+## 📊 출력 파일
 
-#### 입력 파일
-- **파일 형식**: MHTML (.mhtml)
-- **파일 위치**: `data/input/domino.mhtml`
-- **데이터 소스**: 도미노 증권 웹사이트에서 다운로드한 포트폴리오 페이지
-
-#### 출력 데이터
-
-**position.csv** (계좌별 자산 보유량):
+### position.csv (계좌별 자산 보유량)
 ```csv
 계좌명,자산명,티커,보유량,평단가,수행일시
 위탁종합,팔란티어,PLTR,8.0,225902.0,20250903_224820
 중개형ISA,TIGER 미국초단기국채,0046A0,1629.0,9635.0,20250903_224820
 ```
 
-**cash.csv** (현금 보유량):
+### cash.csv (현금 보유량)
 ```csv
 자산명,보유량,수행일시
 원,2467838.0,20250903_224820
@@ -136,87 +136,47 @@ Domino Provider는 도미노 증권의 MHTML 파일에서 포트폴리오 데이
 엔,22055.0,20250903_224820
 ```
 
-#### 파일 구조
-```
-data/export/
-└── 20250903/          # 수행날짜 폴더 (YYYYMMDD)
-    ├── position.csv   # 계좌별 자산 보유량
-    └── cash.csv       # 현금 보유량
-```
-
-#### 사용 방법
-```bash
-# domino Provider로 donmoa 형태 CSV 내보내기
-python -m donmoa export --provider domino
-
-# 전체 Provider 데이터 수집 및 내보내기
-python -m donmoa export
-```
-
-### Banksalad Provider (뱅크샐러드)
-
-Banksalad Provider는 뱅크샐러드 Excel 파일에서 계좌 데이터를 추출합니다.
-
-#### 지원 데이터
-- **계좌 잔고**: 은행, 증권사 계좌별 잔고 정보
-- **거래 내역**: 입출금, 이체 등 거래 기록
-
-#### 입력 파일
-- **파일 형식**: Excel (.xlsx)
-- **파일 위치**: `data/input/banksalad.xlsx`
-- **데이터 소스**: 뱅크샐러드에서 내보낸 Excel 파일
-
 ## 📖 사용 방법
 
-### CLI 사용
+### 기본 워크플로우
 
 ```bash
-# 데이터 수집 및 CSV 내보내기
+# 1. 데이터 파일 준비
+# data/input/ 폴더에 파일들을 넣어주세요
+
+# 2. 데이터 수집 및 통합
 python -m donmoa collect
 
+# 3. 상태 확인
+python -m donmoa status
+
+# 4. 도움말 보기
+python -m donmoa --help
+```
+
+### 고급 사용법
+
+```bash
 # 특정 Provider만 수집
 python -m donmoa collect --provider domino
-
-# donmoa 형태 CSV 내보내기 (position.csv, cash.csv)
-python -m donmoa export --provider domino
-
-# 상태 확인
-python -m donmoa status
 
 # Provider 연결 테스트
 python -m donmoa test --provider domino
 
 # 설정 확인
 python -m donmoa config
-
-# 배포 환경 모드
-python -m donmoa --deployment health
-
-# 도움말 보기
-python -m donmoa --help
 ```
 
 ### Python API 사용
 
 ```python
 from donmoa.core import Donmoa
-from donmoa.providers.domino import DominoProvider
-from donmoa.providers.banksalad import BanksaladProvider
 
 # Donmoa 인스턴스 생성
 donmoa = Donmoa()
 
-# Provider 추가
-domino_provider = DominoProvider("MySecurities")
-banksalad_provider = BanksaladProvider("MyBank")
-donmoa.add_provider(domino_provider)
-donmoa.add_provider(banksalad_provider)
-
 # 전체 워크플로우 실행
-result = donmoa.run_full_workflow(
-    temp_dir="./temp_data",
-    output_dir="./export"
-)
+result = donmoa.run_full_workflow()
 
 # 결과 확인
 if result['status'] == 'success':
@@ -225,24 +185,18 @@ if result['status'] == 'success':
 
 ## 🧪 테스트
 
-### 파일 파싱 테스트
-
 ```bash
+# 파일 파싱 테스트
 python tests/test_file_parsing.py
-```
 
-### 배포 환경 기능 테스트
-
-```bash
+# 배포 환경 기능 테스트
 python tests/test_deployment.py
 ```
 
 ## 🐳 Docker 배포
 
-### Docker Compose로 실행
-
 ```bash
-# 빌드 및 실행
+# Docker Compose로 실행
 docker-compose up -d
 
 # 로그 확인
@@ -250,13 +204,6 @@ docker-compose logs -f
 
 # 중지
 docker-compose down
-```
-
-### 배포 스크립트 사용
-
-```bash
-# 배포 스크립트 실행
-./deploy.sh
 ```
 
 ## 🚨 문제 해결
@@ -275,17 +222,6 @@ docker-compose down
 
 4. **PermissionError: [Errno 13] Permission denied**
    - 출력 디렉토리에 쓰기 권한이 있는지 확인
-   - 관리자 권한으로 실행 시도
-
-### 설정 파일 관련
-
-1. **설정 파일을 찾을 수 없음**
-   - `config/` 폴더 내 설정 파일 존재 확인
-   - `config/providers/` 폴더 내 Provider 설정 파일 확인
-
-2. **Provider 설정 오류**
-   - `config/providers/` 폴더 내 YAML 파일 확인
-   - 파일 형식 및 문법 오류 확인
 
 ### 로그 확인
 
@@ -298,19 +234,6 @@ logging:
   level: "DEBUG"  # 더 상세한 로그
 ```
 
-## 🔒 보안 고려사항
-
-1. **API 키 보안**
-   - `config/.env` 파일을 `.gitignore`에 추가
-   - API 키를 소스 코드에 하드코딩하지 않음
-
-2. **파일 권한**
-   - 출력 디렉토리 접근 제한
-
-3. **네트워크 보안**
-   - HTTPS API 엔드포인트 사용
-   - 방화벽 설정 확인
-
 ## 📞 지원
 
 문제가 발생하거나 질문이 있으시면:
@@ -318,18 +241,6 @@ logging:
 1. [Issues](https://github.com/yourusername/donmoa/issues) 페이지 확인
 2. 새로운 이슈 생성
 3. 프로젝트 문서 참조
-
-## 🔄 업데이트
-
-```bash
-# 최신 코드 가져오기
-git pull origin main
-
-# 의존성 업데이트
-pip install -r requirements.txt --upgrade
-
-# 설정 파일 확인 (새로운 설정 항목 추가 여부)
-```
 
 ## 📝 라이선스
 

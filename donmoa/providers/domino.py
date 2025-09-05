@@ -6,7 +6,7 @@ import re
 import quopri
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -16,11 +16,10 @@ from .base import BaseProvider
 
 
 class DominoProvider(BaseProvider):
-    """도미노 앱 HTML 파싱 기반 증권사 Provider"""
+    """도미노 앱 MHTML 파싱 기반 증권사 Provider"""
 
     def __init__(self, name: str, credentials: Dict[str, str] = None):
         super().__init__(name, "securities", credentials)
-        self.html_files = {}
 
         # Provider 설정 로드
         self.provider_config = self._load_provider_config()
@@ -28,7 +27,6 @@ class DominoProvider(BaseProvider):
     def _load_provider_config(self) -> Dict[str, Any]:
         """Provider 설정을 로드합니다."""
         from ..utils.config import config_manager
-
         return config_manager.get_provider_config("domino")
 
     def get_file_patterns(self) -> Dict[str, str]:
@@ -39,195 +37,94 @@ class DominoProvider(BaseProvider):
         """계좌 매핑을 가져옵니다."""
         return self.provider_config.get("account_mapping", {})
 
-    def download_data(self, output_dir: Path) -> Dict[str, Path]:
+    def parse_raw_data(self, file_paths: Dict[str, Path]) -> Dict[str, pd.DataFrame]:
         """
-        수동 파일에서 HTML 파일을 읽습니다.
+        raw MHTML 파일을 파싱하여 pandas DataFrame으로 변환합니다.
 
         Args:
-            output_dir: 파일이 있는 디렉토리
+            file_paths: 파싱할 MHTML 파일 경로들
 
         Returns:
-            읽은 파일 경로들
+            데이터 타입별 pandas DataFrame
         """
-        downloaded_files = {}
-
-        # 수동 파일만 사용 - data/input 디렉토리에서 찾기
-        logger.info(f"{self.name} 수동 파일 사용")
-        file_patterns = self.get_file_patterns()
-
-        # input 디렉토리 설정
-        input_dir = Path("data/input")
-        if not input_dir.exists():
-            logger.warning(f"입력 디렉토리가 존재하지 않습니다: {input_dir}")
-            return downloaded_files
-
-        for data_type in ["balances", "positions", "transactions"]:
-            if data_type in file_patterns:
-                pattern = file_patterns[data_type]
-                manual_file = self._find_manual_file(input_dir, data_type, pattern)
-                if manual_file:
-                    downloaded_files[data_type] = manual_file
-
-        if downloaded_files:
-            logger.info(f"{self.name} HTML 파일 준비 완료: {len(downloaded_files)}개")
-        else:
-            logger.warning(f"{self.name} HTML 파일을 찾을 수 없습니다")
-
-        return downloaded_files
-
-    def _find_manual_file(
-        self, directory: Path, data_type: str, pattern: str
-    ) -> Optional[Path]:
-        """수동으로 다운로드한 파일을 찾습니다."""
-        try:
-            matching_files = list(directory.glob(pattern))
-            if matching_files:
-                # 가장 최근 파일 선택
-                latest_file = max(matching_files, key=lambda f: f.stat().st_mtime)
-                logger.info(f"{data_type} 수동 파일 발견: {latest_file}")
-                return latest_file
-        except Exception as e:
-            logger.error(f"{data_type} 파일 검색 오류: {e}")
-
-        return None
-
-    def parse_data(
-        self, file_paths: Dict[str, Path]
-    ) -> Dict[str, List[Dict[str, Any]]]:
-        """
-        HTML/Excel 파일을 파싱하여 구조화된 데이터로 변환합니다.
-
-        Args:
-            file_paths: 파싱할 HTML/Excel 파일 경로들
-
-        Returns:
-            파싱된 데이터
-        """
-        parsed_data = {}
+        dataframes = {}
 
         try:
             # 잔고 정보 파싱
             if "balances" in file_paths and file_paths["balances"].exists():
-                balances = self._parse_balances(file_paths["balances"])
-                if balances:
-                    parsed_data["balances"] = balances
-                    logger.info(f"{self.name} 잔고 파싱 완료: {len(balances)}건")
+                balances_df = self._parse_balances_to_dataframe(file_paths["balances"])
+                if not balances_df.empty:
+                    dataframes["balances"] = balances_df
+                    logger.info(f"{self.name} 잔고 DataFrame 생성 완료: {len(balances_df)}건")
 
             # 포지션 정보 파싱
             if "positions" in file_paths and file_paths["positions"].exists():
-                positions = self._parse_positions(file_paths["positions"])
-                if positions:
-                    parsed_data["positions"] = positions
-                    logger.info(f"{self.name} 포지션 파싱 완료: {len(positions)}건")
+                positions_df = self._parse_positions_to_dataframe(file_paths["positions"])
+                if not positions_df.empty:
+                    dataframes["positions"] = positions_df
+                    logger.info(f"{self.name} 포지션 DataFrame 생성 완료: {len(positions_df)}건")
 
             # 거래 내역 파싱 (배당 내역 제외)
             if "transactions" in file_paths and file_paths["transactions"].exists():
-                transactions = self._parse_transactions(file_paths["transactions"])
-                if transactions:
-                    # 배당 내역 필터링 (기획서 수정사항 반영)
-                    filtered_transactions = [
-                        tx
-                        for tx in transactions
-                        if tx.get("type") != "dividend" and tx.get("type") != "배당"
+                transactions_df = self._parse_transactions_to_dataframe(file_paths["transactions"])
+                if not transactions_df.empty:
+                    # 배당 내역 필터링
+                    transactions_df = transactions_df[
+                        ~transactions_df["type"].str.contains("배당|dividend", case=False, na=False)
                     ]
-                    parsed_data["transactions"] = filtered_transactions
-                    logger.info(
-                        f"{self.name} 거래내역 파싱 완료: {len(filtered_transactions)}건 (배당 제외)"
-                    )
+                    dataframes["transactions"] = transactions_df
+                    logger.info(f"{self.name} 거래내역 DataFrame 생성 완료: {len(transactions_df)}건 (배당 제외)")
 
         except Exception as e:
-            logger.error(f"{self.name} HTML/Excel 파싱 오류: {e}")
+            logger.error(f"{self.name} MHTML 파싱 오류: {e}")
 
-        return parsed_data
+        return dataframes
 
-    def _parse_balances(self, file_path: Path) -> List[Dict[str, Any]]:
-        """잔고 정보 MHTML을 파싱합니다."""
+    def _parse_balances_to_dataframe(self, file_path: Path) -> pd.DataFrame:
+        """잔고 정보 MHTML을 파싱하여 DataFrame으로 변환합니다."""
         try:
             file_ext = file_path.suffix.lower()
 
             if file_ext == ".mhtml":
-                return self._parse_mhtml_cash(file_path)
+                return self._parse_mhtml_cash_to_dataframe(file_path)
             else:
                 logger.error(f"지원하지 않는 파일 형식: {file_ext}")
-                return []
+                return pd.DataFrame()
 
         except Exception as e:
             logger.error(f"잔고 파일 파싱 실패: {e}")
-            return []
+            return pd.DataFrame()
 
-    def _parse_balance_sheet(
-        self, df: pd.DataFrame, sheet_name: str
-    ) -> List[Dict[str, Any]]:
-        """잔고 Excel 시트를 파싱합니다."""
-        try:
-            balances = []
-
-            # Excel 시트 구조에 맞춰 파싱 로직 구현
-            # 실제 구현에서는 실제 Excel 구조를 분석하여 수정 필요
-            for _, row in df.iterrows():
-                try:
-                    account = str(row.get("계좌번호", row.get("account", "")))
-                    balance_text = str(row.get("잔액", row.get("balance", "0")))
-                    available_text = str(
-                        row.get("가용잔액", row.get("available_balance", "0"))
-                    )
-
-                    # 숫자 추출
-                    balance = self._extract_number(balance_text)
-                    available = self._extract_number(available_text)
-
-                    balances.append(
-                        {
-                            "account": account,
-                            "balance": balance,
-                            "available_balance": available,
-                            "currency": "KRW",
-                            "sheet_name": sheet_name,
-                            "provider": self.name,
-                            "parsed_at": datetime.now().isoformat(),
-                        }
-                    )
-
-                except Exception as e:
-                    logger.warning(f"잔고 Excel 항목 파싱 실패: {e}")
-                    continue
-
-            return balances
-
-        except Exception as e:
-            logger.error(f"잔고 Excel 시트 파싱 실패: {e}")
-            return []
-
-    def _parse_positions(self, file_path: Path) -> List[Dict[str, Any]]:
-        """포지션 정보 MHTML을 파싱합니다."""
+    def _parse_positions_to_dataframe(self, file_path: Path) -> pd.DataFrame:
+        """포지션 정보 MHTML을 파싱하여 DataFrame으로 변환합니다."""
         try:
             file_ext = file_path.suffix.lower()
 
             if file_ext == ".mhtml":
-                return self._parse_mhtml_positions(file_path)
+                return self._parse_mhtml_positions_to_dataframe(file_path)
             else:
                 logger.error(f"지원하지 않는 파일 형식: {file_ext}")
-                return []
+                return pd.DataFrame()
 
         except Exception as e:
             logger.error(f"포지션 파일 파싱 실패: {e}")
-            return []
+            return pd.DataFrame()
 
-    def _parse_transactions(self, file_path: Path) -> List[Dict[str, Any]]:
-        """거래 내역 HTML을 파싱합니다 (배당 제외)."""
+    def _parse_transactions_to_dataframe(self, file_path: Path) -> pd.DataFrame:
+        """거래 내역 HTML을 파싱하여 DataFrame으로 변환합니다."""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 html_content = f.read()
 
             soup = BeautifulSoup(html_content, "html.parser")
-            transactions = []
+            transactions_data = []
 
             # 도미노 앱 HTML 구조에 맞춰 파싱 로직 구현
             transaction_elements = soup.find_all("div", class_="transaction-item")
 
             for element in transaction_elements:
                 try:
-                    # 배당 내역인지 확인 (기획서 수정사항 반영)
+                    # 배당 내역인지 확인
                     transaction_type = element.find("span", class_="type").text.strip()
                     if (
                         "배당" in transaction_type
@@ -248,29 +145,27 @@ class DominoProvider(BaseProvider):
                     quantity = self._extract_number(quantity_text)
                     amount = self._extract_number(amount_text)
 
-                    transactions.append(
-                        {
-                            "date": date.strftime("%Y-%m-%d"),
-                            "time": time_text,
-                            "type": transaction_type,
-                            "symbol": symbol,
-                            "quantity": quantity,
-                            "amount": amount,
-                            "currency": "KRW",
-                            "provider": self.name,
-                            "parsed_at": datetime.now().isoformat(),
-                        }
-                    )
+                    transactions_data.append({
+                        "date": date.strftime("%Y-%m-%d"),
+                        "time": time_text,
+                        "type": transaction_type,
+                        "symbol": symbol,
+                        "quantity": quantity,
+                        "amount": amount,
+                        "currency": "KRW",
+                        "provider": self.name,
+                        "parsed_at": datetime.now().isoformat(),
+                    })
 
                 except Exception as e:
                     logger.warning(f"거래내역 항목 파싱 실패: {e}")
                     continue
 
-            return transactions
+            return pd.DataFrame(transactions_data)
 
         except Exception as e:
             logger.error(f"거래내역 HTML 파싱 실패: {e}")
-            return []
+            return pd.DataFrame()
 
     def _extract_number(self, text: str) -> float:
         """텍스트에서 숫자를 추출합니다."""
@@ -281,8 +176,8 @@ class DominoProvider(BaseProvider):
         except ValueError:
             return 0.0
 
-    def _parse_mhtml_cash(self, file_path: Path) -> List[Dict[str, Any]]:
-        """MHTML 파일에서 현금 데이터를 파싱합니다."""
+    def _parse_mhtml_cash_to_dataframe(self, file_path: Path) -> pd.DataFrame:
+        """MHTML 파일에서 현금 데이터를 파싱하여 DataFrame으로 변환합니다."""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -318,14 +213,14 @@ class DominoProvider(BaseProvider):
                         })
 
             logger.info(f"{self.name} 현금 데이터 파싱 완료: {len(cash_data)}건")
-            return cash_data
+            return pd.DataFrame(cash_data)
 
         except Exception as e:
             logger.error(f"현금 MHTML 파싱 실패: {e}")
-            return []
+            return pd.DataFrame()
 
-    def _parse_mhtml_positions(self, file_path: Path) -> List[Dict[str, Any]]:
-        """MHTML 파일에서 포지션 데이터를 파싱합니다."""
+    def _parse_mhtml_positions_to_dataframe(self, file_path: Path) -> pd.DataFrame:
+        """MHTML 파일에서 포지션 데이터를 파싱하여 DataFrame으로 변환합니다."""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -429,11 +324,11 @@ class DominoProvider(BaseProvider):
                             })
 
             logger.info(f"{self.name} 포지션 데이터 파싱 완료: {len(account_assets)}건")
-            return account_assets
+            return pd.DataFrame(account_assets)
 
         except Exception as e:
             logger.error(f"포지션 MHTML 파싱 실패: {e}")
-            return []
+            return pd.DataFrame()
 
     def _parse_date(self, date_text: str) -> datetime:
         """날짜 텍스트를 파싱합니다."""

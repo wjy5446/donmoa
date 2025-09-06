@@ -1,0 +1,55 @@
+# Donmoa 통합 계좌 설정 파일
+# 계좌 정보: 계좌명, 종류, 매핑명
+
+accounts:
+  - name: "월급통장-기업"
+    type: "은행"
+    mapping_name: ["월급통장-기업"]
+
+  - name: "생활비통장-국민"
+    type: "은행"
+    mapping_name: ["생활비통장-국민"]
+
+  - name: "비상금통장-카카오"
+    type: "은행"
+    mapping_name: ["비상금통장-카카오"]
+
+  - name: "주택청약-국민"
+    type: "은행"
+    mapping_name: ["주택청약-국민"]
+
+  - name: "개인연금-미래"
+    type: "증권"
+    mapping_name: ["개인연금-미래"]
+
+  - name: "동적분배-삼성"
+    type: "증권"
+    mapping_name: ["동적분배-삼성"]
+
+  - name: "국내배당-삼성"
+    type: "증권"
+    mapping_name: ["국내배당-삼성"]
+
+  - name: "해외배당-키움"
+    type: "증권"
+    mapping_name: ["해외배당-키움"]
+
+  - name: "개별주-토스"
+    type: "증권"
+    mapping_name: ["개별주-토스"]
+
+  - name: "퇴직연금-미래"
+    type: "증권"
+    mapping_name: ["퇴직연금-미래"]
+
+  - name: "퇴직연금-삼성"
+    type: "증권"
+    mapping_name: ["퇴직연금-삼성"]
+
+  - name: "페이"
+    type: "페이"
+    mapping_name: ["페이", "카카오페이", "네이버페이", "토스페이"]
+
+  - name: "주식계좌"
+    type: "증권"
+    mapping_name: ["주식계좌", "주식투자계좌", "증권계좌"]

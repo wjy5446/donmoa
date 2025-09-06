@@ -1,18 +1,17 @@
 # Donmoa 메인 설정 파일
 
-# 통합 계좌 리스트 설정
-unified_accounts:
-  - "주거래계좌"
-  - "주식투자계좌"
-  - "펀드투자계좌"
-  - "급여계좌"
-  - "사업자계좌"
-  - "해외투자계좌"
+# 통합 계좌 설정 파일 경로
+accounts: "config/accounts.yaml"
 
-# Provider 설정 파일 경로
+# Provider 설정
 providers:
-  domino: "config/providers/domino.yaml"
-  banksalad: "config/providers/banksalad.yaml"
+  domino:
+    input_dir: "./data/input"
+    file_patterns: "*.mhtml"
+
+  banksalad:
+    input_dir: "./data/input"
+    file_patterns: "*.xlsx"
 
 # 내보내기 설정
 export:

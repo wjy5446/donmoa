@@ -77,38 +77,38 @@ class DominoProvider(BaseProvider):
             for table in tables:
                 rows = table.find_all('tr')
 
+                tmp_asset_info = {}
                 for row in rows:
                     cells = row.find_all('td')
-                    if len(cells) < 3:
+
+                    if not cells:
                         continue
 
                     # 자산 정보 추출
                     asset_info = self._extract_asset_info(cells[0])
-                    if not asset_info:
+                    if asset_info:
+                        tmp_asset_info = asset_info
                         continue
 
-                    # 계좌별 보유량 추출
-                    for i, cell in enumerate(cells[1:], 1):
-                        account_name = cell.get_text(strip=True)
-                        if not account_name or account_name == "-":
-                            continue
+                    account_name = cells[0].get_text(strip=True)
+                    if not account_name or account_name == "-":
+                        continue
 
-                        # 금액 정보 추출 (다음 셀들에서)
-                        amount = self._extract_number(cells[i+1].get_text(strip=True)) if i+1 < len(cells) else 0
-                        quantity = self._extract_number(cells[i+2].get_text(strip=True)) if i+2 < len(cells) else 0
-                        avg_price = self._extract_number(cells[i+3].get_text(strip=True)) if i+3 < len(cells) else 0
+                    amount = self._extract_number(cells[1].get_text(strip=True))
+                    quantity = self._extract_number(cells[2].get_text(strip=True))
+                    avg_price = self._extract_number(cells[3].get_text(strip=True))
 
-                        if amount > 0:  # 실제 보유량이 있는 경우만
-                            positions_data.append({
-                                'account': account_name,
-                                'name': asset_info['name'],
-                                'ticker': asset_info['ticker'],
-                                'quantity': quantity,
-                                'average_price': avg_price,
-                                'currency': 'KRW',
-                                'provider': self.name,
-                                'collected_at': datetime.now().isoformat(),
-                            })
+                    if amount > 0:  # 실제 보유량이 있는 경우만
+                        positions_data.append({
+                            'account': account_name,
+                            'name': tmp_asset_info['name'],
+                            'ticker': tmp_asset_info['ticker'],
+                            'quantity': quantity,
+                            'average_price': avg_price,
+                            'currency': 'KRW',
+                            'provider': self.name,
+                            'collected_at': datetime.now().isoformat(),
+                        })
 
             logger.info(f"포지션 데이터 파싱 완료: {len(positions_data)}건")
             return positions_data

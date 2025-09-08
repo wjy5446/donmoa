@@ -4,11 +4,11 @@ Provider 기본 클래스
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
 import re
 import pandas as pd
 
+from ..core.schemas import CashSchema, PositionSchema, TransactionSchema
 from ..utils.logger import logger
 from ..utils.config import config_manager
 
@@ -45,29 +45,37 @@ class BaseProvider(ABC):
         pass
 
     @abstractmethod
-    def parse_cash(self, file_path: Path) -> List[Dict[str, Any]]:
+    def parse_raw(self, file_path: Path) -> Dict[str, pd.DataFrame]:
+        """원본 데이터를 파싱합니다."""
+        pass
+
+    @abstractmethod
+    def parse_cash(self, data: Dict[str, pd.DataFrame]) -> List[CashSchema]:
         """현금 데이터를 파싱합니다."""
         pass
 
     @abstractmethod
-    def parse_positions(self, file_path: Path) -> List[Dict[str, Any]]:
+    def parse_positions(self, data: Dict[str, pd.DataFrame]) -> List[PositionSchema]:
         """포지션 데이터를 파싱합니다."""
         pass
 
     @abstractmethod
-    def parse_transactions(self, file_path: Path) -> List[Dict[str, Any]]:
+    def parse_transactions(self, data: Dict[str, pd.DataFrame]) -> List[TransactionSchema]:
         """거래 데이터를 파싱합니다."""
         pass
 
-    def collect_all(self, input_dir: Path) -> Dict[str, List[Dict[str, Any]]]:
+    def collect_all(
+        self,
+        input_dir: Path
+    ) -> Dict[str, Union[List[CashSchema], List[PositionSchema], List[TransactionSchema]]]:
         """
         모든 데이터를 수집하고 공통 스키마로 변환합니다.
         하위 클래스에서 추상화 함수만 구현하면 자동으로 동작합니다.
         """
         result = {
-            "cash": [],
-            "positions": [],
-            "transactions": []
+            "cash": None,
+            "positions": None,
+            "transactions": None
         }
 
         try:
@@ -79,13 +87,15 @@ class BaseProvider(ABC):
 
             logger.info(f"{self.name}: 파일 발견 - {file_path.name}")
 
+            raw_datas = self.parse_raw(file_path)
+
             # 각 데이터 타입별로 파싱 (하위 클래스의 추상화 함수 호출)
-            result["cash"] = self._normalize_cash(self.parse_cash(file_path))
-            result["positions"] = self._normalize_positions(self.parse_positions(file_path))
-            result["transactions"] = self._normalize_transactions(self.parse_transactions(file_path))
+            result["cash"] = self.parse_cash(raw_datas)
+            result["positions"] = self.parse_positions(raw_datas)
+            result["transactions"] = self.parse_transactions(raw_datas)
 
             logger.info(f"{self.name}: 데이터 수집 완료 - 현금:{len(result['cash'])}건, "
-                       f"포지션:{len(result['positions'])}건, 거래:{len(result['transactions'])}건")
+                        f"포지션:{len(result['positions'])}건, 거래:{len(result['transactions'])}건")
 
         except Exception as e:
             logger.error(f"{self.name} 데이터 수집 실패: {e}")
@@ -107,62 +117,6 @@ class BaseProvider(ABC):
 
         # 가장 최근 파일 반환
         return max(files, key=lambda f: f.stat().st_mtime)
-
-    def _normalize_cash(self, raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """현금 데이터를 정규화합니다."""
-        normalized = []
-        for item in raw_data:
-            try:
-                normalized.append({
-                    'account': str(item.get('account', '')),
-                    'balance': self._convert_to_number(item.get('balance', 0)),
-                    'currency': item.get('currency', 'KRW'),
-                    'provider': self.name,
-                    'collected_at': item.get('collected_at', datetime.now().isoformat()),
-                })
-            except Exception as e:
-                logger.warning(f"현금 데이터 정규화 실패: {e}")
-        return normalized
-
-    def _normalize_positions(self, raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """포지션 데이터를 정규화합니다."""
-        normalized = []
-        for item in raw_data:
-            try:
-                normalized.append({
-                    'account': str(item.get('account', '')),
-                    'name': item.get('name', ''),
-                    'ticker': item.get('ticker', ''),
-                    'quantity': self._convert_to_number(item.get('quantity', 0)),
-                    'average_price': self._convert_to_number(item.get('average_price', 0)),
-                    'currency': item.get('currency', 'KRW'),
-                    'provider': self.name,
-                    'collected_at': item.get('collected_at', datetime.now().isoformat()),
-                })
-            except Exception as e:
-                logger.warning(f"포지션 데이터 정규화 실패: {e}")
-        return normalized
-
-    def _normalize_transactions(self, raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """거래 데이터를 정규화합니다."""
-        normalized = []
-        for item in raw_data:
-            try:
-                normalized.append({
-                    'date': self._format_date(item.get('date', '')),
-                    'transaction_type': item.get('transaction_type', '기타'),
-                    'category': item.get('category', ''),
-                    'category_detail': item.get('category_detail', ''),
-                    'amount': self._convert_to_number(item.get('amount', 0)),
-                    'account': str(item.get('account', '')),
-                    'currency': item.get('currency', 'KRW'),
-                    'note': item.get('note', ''),
-                    'provider': self.name,
-                    'collected_at': item.get('collected_at', datetime.now().isoformat()),
-                })
-            except Exception as e:
-                logger.warning(f"거래 데이터 정규화 실패: {e}")
-        return normalized
 
     # 공통 유틸리티 메서드들
     def _convert_to_number(self, value: Any) -> float:

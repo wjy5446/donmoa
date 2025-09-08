@@ -48,11 +48,11 @@ class Donmoa:
                 "collection_summary": summary
             }
 
-            logger.info(f"워크플로우 완료: {total_records}개 레코드, {len(exported_files)}개 파일")
+            logger.info(f"✅ 워크플로우 완료: {total_records}개 레코드, {len(exported_files)}개 파일")
             return result
 
         except Exception as e:
-            logger.error(f"워크플로우 실행 실패: {e}")
+            logger.error(f"❌ 워크플로우 실행 실패: {e}")
             return {"status": "error", "message": str(e)}
 
     def get_status(self) -> Dict[str, Any]:
@@ -69,7 +69,11 @@ class Donmoa:
             "timestamp": datetime.now().isoformat()
         }
 
-    def collect(self, input_dir: str = "data/input", provider: Union[str, None] = None) -> Dict[str, List[Dict[str, Any]]]:
+    def collect(
+        self,
+        input_dir: str = "data/input",
+        provider: Union[str, None] = None
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
         데이터를 수집합니다.
 
@@ -85,7 +89,11 @@ class Donmoa:
 
         return collected_data
 
-    def export_to_csv(self, data: Optional[Dict[str, List[Dict[str, Any]]]] = None, output_dir: Optional[Path] = None) -> Dict[str, Path]:
+    def export_to_csv(
+        self,
+        data: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+        output_dir: Optional[Path] = None
+    ) -> Dict[str, Path]:
         """데이터를 CSV로 내보냅니다."""
 
         if output_dir:

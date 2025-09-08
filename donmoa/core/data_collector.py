@@ -2,12 +2,12 @@
 데이터 수집 클래스
 """
 from pathlib import Path
-from typing import Any, Dict, List, Union, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from ..providers.base import BaseProvider
 from ..utils.logger import logger
 from ..utils.config import config_manager
-from .schemas import DataSchema
+from .schemas import CashSchema, PositionSchema, TransactionSchema
 
 
 class DataCollector:
@@ -97,7 +97,10 @@ class DataCollector:
         except Exception as e:
             logger.warning(f"{provider.name} 계좌 매핑 적용 실패: {e}")
 
-    def _collect_all_providers(self, input_dir: Path) -> Dict[str, List[Dict[str, Any]]]:
+    def _collect_all_providers(
+        self,
+        input_dir: Path
+    ) -> Dict[str, Union[List[CashSchema], List[PositionSchema], List[TransactionSchema]]]:
         """모든 Provider에서 데이터를 수집하고 통합합니다."""
         collected_data = {}
 
@@ -106,14 +109,11 @@ class DataCollector:
             try:
                 provider_data = provider.collect_all(input_dir)
                 if provider_data:
-                    validated_data = self._validate_provider_data(provider.name, provider_data)
-                    if validated_data:
-                        collected_data[provider.name] = validated_data
-                        logger.info(f"✅ {provider.name}: {len(validated_data)}개 데이터 타입 수집")
-                    else:
-                        logger.warning(f"⚠️ {provider.name}: 데이터 검증 실패")
+                    logger.info(f"✅ {provider.name}= 데이터 타입 수집")
                 else:
                     logger.warning(f"⚠️ {provider.name}: 데이터 없음")
+
+                collected_data[provider.name] = provider_data
             except Exception as e:
                 logger.error(f"❌ {provider.name}: {e}")
 
@@ -127,13 +127,18 @@ class DataCollector:
 
         # 통합 결과 로그
         counts = {data_type: len(records) for data_type, records in integrated_data.items()}
-        logger.info(f"데이터 통합 완료: cash({counts['cash']}), "
-                   f"positions({counts['positions']}), "
-                   f"transactions({counts['transactions']})")
+        logger.info(
+            f"✅ 데이터 통합 완료: cash({counts['cash']}), "
+            f"positions({counts['positions']}), transactions({counts['transactions']})"
+        )
 
         return integrated_data
 
-    def _collect_single_provider(self, input_dir: Path, provider_name: str) -> Dict[str, List[Dict[str, Any]]]:
+    def _collect_single_provider(
+        self,
+        input_dir: Path,
+        provider_name: str
+    ) -> Dict[str, Union[List[CashSchema], List[PositionSchema], List[TransactionSchema]]]:
         """특정 Provider에서 데이터를 수집합니다."""
         # Provider 찾기
         target_provider = next((p for p in self.providers if p.name == provider_name), None)
@@ -145,36 +150,11 @@ class DataCollector:
         try:
             provider_data = target_provider.collect_all(input_dir)
             if provider_data:
-                validated_data = self._validate_provider_data(provider_name, provider_data)
-                if validated_data:
-                    logger.info(f"✅ {provider_name}: {len(validated_data)}개 데이터 타입 수집")
-                    return validated_data
-                else:
-                    logger.warning(f"⚠️ {provider_name}: 데이터 검증 실패")
+                logger.info(f"✅ {provider_name}: {len(provider_data)}개 데이터 타입 수집")
+                return provider_data
             else:
                 logger.warning(f"⚠️ {provider_name}: 데이터 없음")
         except Exception as e:
             logger.error(f"❌ {provider_name}: {e}")
 
         return {data_type: [] for data_type in self.DATA_TYPES}
-
-    def _validate_provider_data(self, provider_name: str, data: Dict[str, List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:
-        """Provider 데이터를 검증합니다."""
-        validated_data = {data_type: [] for data_type in self.DATA_TYPES}
-
-        # 각 데이터 타입별 검증
-        validation_map = {
-            'cash': DataSchema.validate_cash,
-            'positions': DataSchema.validate_position,
-            'transactions': DataSchema.validate_transaction
-        }
-
-        for data_type, validation_func in validation_map.items():
-            if data_type in data:
-                for item in data[data_type]:
-                    if validation_func(item):
-                        validated_data[data_type].append(item)
-                    else:
-                        logger.warning(f"{provider_name} {data_type} 데이터 검증 실패: {item}")
-
-        return validated_data

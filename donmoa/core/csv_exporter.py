@@ -23,7 +23,11 @@ class CSVExporter:
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def export_to_csv(self, integrated_data: Dict[str, List[Dict[str, Any]]], timestamp: Optional[datetime] = None) -> Dict[str, Path]:
+    def export_to_csv(
+        self,
+        integrated_data: Dict[str, List[Dict[str, Any]]],
+        timestamp: Optional[datetime] = None
+    ) -> Dict[str, Path]:
         """통합된 데이터를 CSV 파일로 내보냅니다."""
         if timestamp is None:
             timestamp = datetime.now()
@@ -49,7 +53,11 @@ class CSVExporter:
 
         return exported_files
 
-    def export_provider_data_to_csv(self, collected_data: Dict[str, Dict[str, List[Dict[str, Any]]]], timestamp: Optional[datetime] = None) -> Dict[str, Path]:
+    def export_provider_data_to_csv(
+        self,
+        collected_data: Dict[str, Dict[str, List[Dict[str, Any]]]],
+        timestamp: Optional[datetime] = None
+    ) -> Dict[str, Path]:
         """Provider별 원본 데이터를 CSV 파일로 내보냅니다."""
         if timestamp is None:
             timestamp = datetime.now()

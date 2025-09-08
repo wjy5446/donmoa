@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Union
 from ..providers.base import BaseProvider
 from ..utils.logger import logger
 from ..utils.config import config_manager
+from ..utils.date_utils import get_all_date_folders
 from .schemas import CashSchema, PositionSchema, TransactionSchema
 
 
@@ -36,10 +37,19 @@ class DataCollector:
         """데이터를 수집합니다."""
         provider = provider or 'all'
 
+        # 가장 최근 날짜 폴더 찾기
+        date_folders = get_all_date_folders(input_dir)
+        if not date_folders:
+            logger.error(f"날짜 폴더를 찾을 수 없습니다: {input_dir}")
+            return {data_type: [] for data_type in self.DATA_TYPES}
+
+        latest_date, latest_folder = date_folders[-1]
+        logger.info(f"가장 최근 날짜 폴더 선택: {latest_date} ({latest_folder})")
+
         if provider == 'all':
-            return self._collect_all_providers(input_dir)
+            return self._collect_all_providers(latest_folder)
         else:
-            return self._collect_single_provider(input_dir, provider)
+            return self._collect_single_provider(latest_folder, provider)
 
     def get_collection_summary(self, collected_data: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
         """수집 요약 정보를 반환합니다."""
@@ -93,7 +103,6 @@ class DataCollector:
             provider_mapping = self.account_mappings.get(provider.name, {})
             if provider_mapping:
                 provider.set_account_mapping(provider_mapping)
-                logger.info(f"{provider.name} 계좌 매핑 적용: {len(provider_mapping)}개")
         except Exception as e:
             logger.warning(f"{provider.name} 계좌 매핑 적용 실패: {e}")
 
@@ -125,6 +134,9 @@ class DataCollector:
                 if data_type in provider_data:
                     integrated_data[data_type].extend(provider_data[data_type])
 
+        # 폴더 날짜를 스키마에 설정
+        self._set_date_for_schemas(integrated_data, input_dir)
+
         # 통합 결과 로그
         counts = {data_type: len(records) for data_type, records in integrated_data.items()}
         logger.info(
@@ -150,6 +162,8 @@ class DataCollector:
         try:
             provider_data = target_provider.collect_all(input_dir)
             if provider_data:
+                # 폴더 날짜를 스키마에 설정
+                self._set_date_for_schemas(provider_data, input_dir)
                 logger.info(f"✅ {provider_name}: {len(provider_data)}개 데이터 타입 수집")
                 return provider_data
             else:
@@ -158,3 +172,25 @@ class DataCollector:
             logger.error(f"❌ {provider_name}: {e}")
 
         return {data_type: [] for data_type in self.DATA_TYPES}
+
+    def _set_date_for_schemas(self, data: Dict[str, List[Any]], input_dir: Path) -> None:
+        """폴더 이름에서 추출한 날짜를 스키마의 date 필드에 설정합니다."""
+        from ..utils.date_utils import extract_date_from_folder_name
+
+        folder_date = extract_date_from_folder_name(input_dir)
+
+        if not folder_date:
+            logger.warning(f"폴더에서 날짜를 추출할 수 없습니다: {input_dir}")
+            return
+
+        # 각 데이터 타입별로 date 필드 설정
+        for data_type, records in data.items():
+            if not records:
+                continue
+            if data_type == 'transactions':
+                continue
+
+            for record in records:
+                if hasattr(record, 'date'):
+                    record.date = folder_date
+                    logger.debug(f"{data_type} 레코드 date 설정: {folder_date}")

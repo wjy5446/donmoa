@@ -24,7 +24,7 @@ class Donmoa:
 
     def run_full_workflow(self, input_dir: str = "data/input", output_dir: Optional[Path] = None) -> Dict[str, Any]:
         """전체 워크플로우를 실행합니다."""
-        logger.info("Donmoa 워크플로우 시작")
+        logger.info("✅ Donmoa 워크플로우 시작")
 
         try:
             # 1. 데이터 수집 (통합된 데이터)
@@ -117,14 +117,12 @@ class Donmoa:
             banksalad_provider = BanksaladProvider("banksalad", full_config)
             self.add_provider(banksalad_provider)
 
-            logger.info("기본 Provider 등록 완료")
         except Exception as e:
             logger.warning(f"기본 Provider 등록 실패: {e}")
 
     def add_provider(self, provider: BaseProvider) -> None:
         """Provider를 추가합니다."""
         self.data_collector.add_provider(provider)
-        logger.info(f"Provider 등록: {provider.name}")
 
     def remove_provider(self, provider_name: str) -> None:
         """Provider를 제거합니다."""

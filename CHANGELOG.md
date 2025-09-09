@@ -7,6 +7,53 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-01-15
+
+### Added
+- **ManualProvider 추가**: 수동 입력을 위한 Excel 파일 파싱 지원
+  - Excel 템플릿 자동 생성 기능 (`template` 명령어)
+  - 수동 입력 데이터를 표준 스키마로 변환
+  - `data/input/YYYY-MM-DD/manual.xlsx` 파일 지원
+- **통일된 데이터 스키마**: 모든 Provider에서 동일한 스키마 사용
+  - `CashSchema`: 현금 데이터 (날짜, 카테고리, 계좌, 잔액, 통화)
+  - `PositionSchema`: 포지션 데이터 (날짜, 계좌, 자산명, 티커, 수량, 평단가)
+  - `TransactionSchema`: 거래 데이터 (날짜, 계좌, 거래유형, 금액, 카테고리)
+- **Excel 템플릿 생성기**: `TemplateGenerator` 클래스 추가
+  - 사용자 친화적인 Excel 템플릿 자동 생성
+  - 필수/선택 필드 구분 및 가이드 제공
+- **날짜별 폴더 구조**: `data/input/YYYY-MM-DD/` 형태의 입력 폴더 구조
+- **계좌 매핑 시스템**: `config/accounts.yaml`을 통한 계좌 통합 관리
+
+### Changed
+- **Provider 구조 개선**: BaseProvider 추상 클래스 개선
+  - 필수 메서드 명확화 (`get_supported_extensions`, `parse_raw`, `parse_cash`, `parse_positions`, `parse_transactions`)
+  - 공통 유틸리티 메서드 통합
+  - 일관된 에러 처리 및 로깅
+- **데이터 수집 최적화**: DataCollector 개선
+  - 날짜별 폴더 자동 감지
+  - Provider별 데이터 통합 로직 개선
+  - 빈 데이터 처리 개선
+- **CSV 내보내기 개선**: CSVExporter 정리
+  - 사용하지 않는 메서드 제거 (`export_provider_data_to_csv`)
+  - 통합된 데이터만 내보내기로 단순화
+- **CLI 명령어 추가**: `template` 명령어로 Excel 템플릿 생성
+- **문서 업데이트**: README.md, INSTALL.md에 ManualProvider 및 템플릿 기능 반영
+
+### Fixed
+- **코드 중복 제거**: BaseProvider와 ManualProvider 간 중복 메서드 제거
+- **메모리 사용량 최적화**: 빈 DataFrame으로 초기화하여 일관성 개선
+- **날짜 형식 통일**: 모든 Provider에서 `strftime` 사용으로 통일
+- **에러 처리 개선**: Provider별 예외 처리 강화
+
+### Removed
+- **사용하지 않는 메서드**: CSVExporter의 `export_provider_data_to_csv` 메서드 제거
+- **중복 코드**: ManualProvider의 `_find_input_file` 메서드 제거 (BaseProvider에서 상속)
+- **불필요한 의존성**: requirements.txt에서 사용하지 않는 라이브러리 제거
+
+### Security
+- **설정 파일 보안**: 민감한 정보 분리 및 환경 변수 지원
+- **입력 데이터 검증**: 수동 입력 데이터의 유효성 검증 강화
+
 ## [0.2.0] - 2025-09-06
 
 ### Added
@@ -75,7 +122,7 @@
 ## [0.0.1] - 2025-08-XX
 
 ### Added
-- �� **프로젝트 초기 설정**
+-  **프로젝트 초기 설정**
   - 기본 Python 패키지 구조
   - 의존성 관리 (`requirements.txt`)
   - 가상환경 설정 (`.venv/`)

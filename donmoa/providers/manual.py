@@ -18,9 +18,9 @@ class ManualProvider(BaseProvider):
     def __init__(self, name: str = "manual", config: Optional[Dict[str, Any]] = None):
         super().__init__(name, config)
 
-    def get_supported_extensions(self) -> List[str]:
-        """지원하는 파일 확장자 목록을 반환합니다."""
-        return ["xlsx"]
+    def get_supported_names(self) -> List[str]:
+        """지원하는 파일 이름 목록을 반환합니다."""
+        return ["manual.xlsx"]
 
     def parse_raw(self, file_path: Path) -> Dict[str, pd.DataFrame]:
         """Excel 파일을 파싱합니다."""

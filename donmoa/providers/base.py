@@ -44,7 +44,7 @@ class BaseProvider(ABC):
             return {}
 
     @abstractmethod
-    def get_supported_extensions(self) -> List[str]:
+    def get_supported_names(self) -> List[str]:
         """지원하는 파일 확장자 목록을 반환합니다."""
         pass
 
@@ -119,10 +119,10 @@ class BaseProvider(ABC):
         if not input_dir.exists():
             return None
 
-        extensions = self.get_supported_extensions()
+        names = self.get_supported_names()
         files = []
-        for ext in extensions:
-            files.extend(input_dir.glob(f"*.{ext}"))
+        for name in names:
+            files.extend(input_dir.glob(f"{name}"))
 
         if not files:
             return None

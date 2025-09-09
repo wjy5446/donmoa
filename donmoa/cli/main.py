@@ -88,10 +88,12 @@ def template(input_dir):
     # 날짜 입력 받기
     while True:
         try:
-            date_input = console.input("[cyan]날짜를 입력하세요 (YYYY-MM-DD 형식): [/cyan]")
+            date_input = console.input("[cyan]날짜를 입력하세요 (YYYY-MM-DD 형식, 엔터시 오늘 날짜): [/cyan]")
             if not date_input.strip():
-                console.print("[red]날짜를 입력해주세요.[/red]")
-                continue
+                # 엔터만 치면 오늘 날짜로 설정
+                date = datetime.now().strftime("%Y-%m-%d")
+                console.print(f"[yellow]오늘 날짜로 설정: {date}[/yellow]")
+                break
 
             # 날짜 형식 검증
             datetime.strptime(date_input.strip(), "%Y-%m-%d")

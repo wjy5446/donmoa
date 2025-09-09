@@ -39,11 +39,11 @@ def collect(input_dir, output_dir):
     result = donmoa.run_full_workflow(input_dir, Path(output_dir) if output_dir else None)
 
     if result['status'] == 'success':
-        console.print(f"[green]✅ 성공: {result['total_records']}개 레코드 처리[/green]")
+        console.print(f"[green]SUCCESS: {result['total_records']}개 레코드 처리[/green]")
         for file_type, file_path in result['exported_files'].items():
             console.print(f"  {file_type}: {file_path}")
     else:
-        console.print(f"[red]❌ 실패: {result['message']}[/red]")
+        console.print(f"[red]ERROR: {result['message']}[/red]")
 
 
 @cli.command()
@@ -72,6 +72,47 @@ def status(input_dir):
         table.add_row("마지막 실행", status_info["last_run"]["collection_timestamp"])
 
     console.print(table)
+
+
+@cli.command()
+@click.option('--input-dir', '-i', help='입력 파일 디렉토리')
+def template(input_dir):
+    """수동 입력을 위한 Excel 템플릿을 생성합니다"""
+    from ..core.template_generator import TemplateGenerator
+    from datetime import datetime
+
+    # 설정에서 기본값 가져오기
+    if not input_dir:
+        input_dir = config_manager.get("input_dir", "data/input")
+
+    # 날짜 입력 받기
+    while True:
+        try:
+            date_input = console.input("[cyan]날짜를 입력하세요 (YYYY-MM-DD 형식): [/cyan]")
+            if not date_input.strip():
+                console.print("[red]날짜를 입력해주세요.[/red]")
+                continue
+
+            # 날짜 형식 검증
+            datetime.strptime(date_input.strip(), "%Y-%m-%d")
+            date = date_input.strip()
+            break
+        except ValueError:
+            console.print("[red]올바른 날짜 형식이 아닙니다. YYYY-MM-DD 형식으로 입력해주세요.[/red]")
+        except KeyboardInterrupt:
+            console.print("\n[yellow]작업이 취소되었습니다.[/yellow]")
+            return
+
+    template_generator = TemplateGenerator()
+    result = template_generator.create_template(date, input_dir)
+
+    if result['status'] == 'success':
+        console.print(f"[green]SUCCESS: 템플릿 생성 완료: {result['file_path']}[/green]")
+        console.print(f"  - Position 시트: {result['sheets']['position']}개 컬럼")
+        console.print(f"  - Cash 시트: {result['sheets']['cash']}개 컬럼")
+        console.print(f"  - Transaction 시트: {result['sheets']['transaction']}개 컬럼")
+    else:
+        console.print(f"[red]ERROR: 템플릿 생성 실패: {result['message']}[/red]")
 
 
 if __name__ == '__main__':

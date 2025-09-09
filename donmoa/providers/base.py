@@ -94,11 +94,9 @@ class BaseProvider(ABC):
             result["positions"] = self.parse_positions(raw_datas)
             result["transactions"] = self.parse_transactions(raw_datas)
 
-            logger.info(f"{self.name}: 데이터 수집 완료 - 현금:{len(result['cash'])}건, "
-                        f"포지션:{len(result['positions'])}건, 거래:{len(result['transactions'])}건")
-
+            logger.info(f"🟢 {self.name}: 데이터 수집 완료 - 현금:{len(result['cash'])}건, 포지션:{len(result['positions'])}건, 거래:{len(result['transactions'])}건")
         except Exception as e:
-            logger.error(f"{self.name} 데이터 수집 실패: {e}")
+            logger.error(f"❌ {self.name} 데이터 수집 실패: {e}")
 
         return result
 

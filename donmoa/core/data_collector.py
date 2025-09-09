@@ -37,19 +37,29 @@ class DataCollector:
         """데이터를 수집합니다."""
         provider = provider or 'all'
 
-        # 가장 최근 날짜 폴더 찾기
-        date_folders = get_all_date_folders(input_dir)
-        if not date_folders:
-            logger.error(f"날짜 폴더를 찾을 수 없습니다: {input_dir}")
-            return {data_type: [] for data_type in self.DATA_TYPES}
+        # 입력 디렉토리가 직접 날짜 폴더인지 확인
+        from ..utils.date_utils import extract_date_from_folder_name
+        folder_date = extract_date_from_folder_name(input_dir)
 
-        latest_date, latest_folder = date_folders[-1]
-        logger.info(f"가장 최근 날짜 폴더 선택: {latest_date} ({latest_folder})")
+        if folder_date:
+            # 직접 지정된 폴더가 날짜 폴더인 경우
+            logger.info(f"지정된 날짜 폴더 사용: {folder_date} ({input_dir})")
+            target_folder = input_dir
+        else:
+            # 가장 최근 날짜 폴더 찾기
+            date_folders = get_all_date_folders(input_dir)
+            if not date_folders:
+                logger.error(f"날짜 폴더를 찾을 수 없습니다: {input_dir}")
+                return {data_type: [] for data_type in self.DATA_TYPES}
+
+            latest_date, latest_folder = date_folders[-1]
+            logger.info(f"가장 최근 날짜 폴더 선택: {latest_date} ({latest_folder})")
+            target_folder = latest_folder
 
         if provider == 'all':
-            return self._collect_all_providers(latest_folder)
+            return self._collect_all_providers(target_folder)
         else:
-            return self._collect_single_provider(latest_folder, provider)
+            return self._collect_single_provider(target_folder, provider)
 
     def get_collection_summary(self, collected_data: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
         """수집 요약 정보를 반환합니다."""
@@ -117,10 +127,6 @@ class DataCollector:
         for provider in self.providers:
             try:
                 provider_data = provider.collect_all(input_dir)
-                if provider_data:
-                    logger.info(f"✅ {provider.name}= 데이터 타입 수집")
-                else:
-                    logger.warning(f"⚠️ {provider.name}: 데이터 없음")
 
                 collected_data[provider.name] = provider_data
             except Exception as e:
@@ -130,9 +136,10 @@ class DataCollector:
         integrated_data = {data_type: [] for data_type in self.DATA_TYPES}
 
         for provider_data in collected_data.values():
-            for data_type in self.DATA_TYPES:
-                if data_type in provider_data:
-                    integrated_data[data_type].extend(provider_data[data_type])
+            if provider_data:
+                for data_type in self.DATA_TYPES:
+                    if data_type in provider_data and provider_data[data_type]:
+                        integrated_data[data_type].extend(provider_data[data_type])
 
         # 폴더 날짜를 스키마에 설정
         self._set_date_for_schemas(integrated_data, input_dir)

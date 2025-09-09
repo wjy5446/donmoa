@@ -108,15 +108,31 @@ logging:
 ```
 
 ### 계좌 매핑 설정
-`config/accounts.yaml`에서 계좌 매핑을 설정합니다:
+
+1. **예시 파일 복사**:
+   ```bash
+   cp config/accounts.yaml.example config/accounts.yaml
+   ```
+
+2. **계좌 정보 수정**: `config/accounts.yaml`에서 실제 계좌 정보에 맞게 수정합니다:
 
 ```yaml
 accounts:
-  - name: "통합계좌1"
-    mapping_name: ["증권계좌1", "증권계좌2"]
-  - name: "통합계좌2"
-    mapping_name: ["은행계좌1"]
+  - name: "월급통장-기업"
+    type: "은행"
+    mapping_name: ["월급통장-기업", "기업은행 월급통장"]
+
+  - name: "주식계좌-삼성"
+    type: "증권"
+    mapping_name: ["주식계좌-삼성", "삼성증권 주식계좌"]
+
+  - name: "페이서비스"
+    type: "페이"
+    mapping_name: ["페이", "카카오페이", "네이버페이", "토스페이"]
 ```
+
+> **중요**: `accounts.yaml`은 개인 정보이므로 `.gitignore`에 추가되어 버전 관리에서 제외됩니다.
+> 실제 계좌 정보는 `accounts.yaml`에, 예시는 `accounts.yaml.example`에 저장됩니다.
 
 ## 🔌 지원 Provider
 

@@ -9,7 +9,7 @@ from typing import Dict, Optional, Any, List
 import pandas as pd
 import openpyxl
 
-from ..core.schemas import CashSchema, PositionSchema, TransactionSchema
+from ..schemas import CashSchema, PositionSchema, TransactionSchema
 from ..utils.logger import logger
 from .base import BaseProvider
 

@@ -51,7 +51,17 @@ class ConfigManager:
         """외부 설정 파일을 로드합니다."""
         try:
             config_file = Path(config_path)
-            if not config_file.exists():
+
+            # accounts.yaml이 없으면 accounts.yaml.example을 시도
+            if config_name == "Accounts" and not config_file.exists():
+                example_file = Path("config/accounts.yaml.example")
+                if example_file.exists():
+                    logger.info(f"{config_name} 설정 파일이 없어 예시 파일을 사용합니다: {example_file}")
+                    config_file = example_file
+                else:
+                    logger.warning(f"{config_name} 설정 파일을 찾을 수 없습니다: {config_path}")
+                    return {}
+            elif not config_file.exists():
                 logger.warning(f"{config_name} 설정 파일을 찾을 수 없습니다: {config_path}")
                 return {}
 

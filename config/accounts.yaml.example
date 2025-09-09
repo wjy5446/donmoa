@@ -1,0 +1,25 @@
+# Donmoa 통합 계좌 설정 파일 예시
+# 실제 계좌 정보는 accounts.yaml에 저장하고 gitignore에 추가하세요
+
+accounts:
+  # 은행 계좌 예시
+  - name: "월급통장-기업"
+    type: "은행"
+    mapping_name: ["월급통장-기업", "기업은행 월급통장"]
+
+  # 증권 계좌 예시
+  - name: "개인연금-미래"
+    type: "증권"
+    mapping_name: ["개인연금-미래", "미래에셋 개인연금"]
+
+  # 페이 서비스 예시
+  - name: "페이"
+    type: "페이"
+    mapping_name: ["페이", "카카오페이", "네이버페이", "토스페이", "페이서비스"]
+
+
+# 사용법:
+# 1. 이 파일을 accounts.yaml로 복사하세요
+# 2. 실제 계좌 정보에 맞게 수정하세요
+# 3. mapping_name은 각 Provider에서 파싱되는 실제 계좌명과 매칭되어야 합니다
+# 4. accounts.yaml은 .gitignore에 추가되어 버전 관리에서 제외됩니다

@@ -135,6 +135,7 @@ config.local.yaml
 secrets/
 keys/
 encrypted/
+config/accounts.yaml
 
 # IDE
 .vscode/

@@ -11,7 +11,7 @@ from typing import Dict, Optional, Any, List
 import pandas as pd
 from bs4 import BeautifulSoup
 
-from ..core.schemas import CashSchema, PositionSchema, TransactionSchema
+from ..schemas import CashSchema, PositionSchema, TransactionSchema
 from ..utils.logger import logger
 from .base import BaseProvider
 

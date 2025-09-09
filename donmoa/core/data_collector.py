@@ -8,7 +8,7 @@ from ..providers.base import BaseProvider
 from ..utils.logger import logger
 from ..utils.config import config_manager
 from ..utils.date_utils import get_all_date_folders
-from .schemas import CashSchema, PositionSchema, TransactionSchema
+from ..schemas import CashSchema, PositionSchema, TransactionSchema
 
 
 class DataCollector:
@@ -19,12 +19,15 @@ class DataCollector:
     def __init__(self):
         self.account_mappings: Dict[str, Dict[str, str]] = {}
         self.providers: List[BaseProvider] = []
-        self._load_account_mappings()
 
     def add_provider(self, provider: BaseProvider) -> None:
         """Provider를 추가합니다."""
         self.providers.append(provider)
-        self._apply_account_mapping_to_provider(provider)
+
+        # 계좌 매핑이 아직 로드되지 않았다면 로드
+        if not self.account_mappings:
+            self._set_account_mappings()
+
         logger.info(f"Provider 추가: {provider.name}")
 
     def remove_provider(self, provider_name: str) -> None:
@@ -98,7 +101,7 @@ class DataCollector:
             "total_records": total_records
         }
 
-    def _load_account_mappings(self) -> None:
+    def _set_account_mappings(self) -> None:
         """설정에서 계좌 매핑 정보를 로드합니다."""
         try:
             accounts = config_manager.get_accounts()
@@ -113,24 +116,9 @@ class DataCollector:
 
                 # 각 매핑명을 모든 Provider에 추가
                 for provider in self.providers:
-                    if provider.name not in self.account_mappings:
-                        self.account_mappings[provider.name] = {}
-
-                    for mapping_name in mapping_names:
-                        self.account_mappings[provider.name][mapping_name] = account_name
-
-            logger.info(f"계좌 매핑 로드 완료: {len(accounts)}개 계좌")
+                    provider.add_account_mapping({account_name: mapping_names})
         except Exception as e:
-            logger.warning(f"계좌 매핑 로드 실패: {e}")
-
-    def _apply_account_mapping_to_provider(self, provider: BaseProvider) -> None:
-        """Provider에 계좌 매핑을 적용합니다."""
-        try:
-            provider_mapping = self.account_mappings.get(provider.name, {})
-            if provider_mapping:
-                provider.set_account_mapping(provider_mapping)
-        except Exception as e:
-            logger.warning(f"{provider.name} 계좌 매핑 적용 실패: {e}")
+            logger.warning(f"계좌 매핑 설정 실패: {e}")
 
     def _collect_all_providers(
         self,

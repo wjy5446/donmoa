@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Any
 import openpyxl
 
 from .base import BaseProvider
-from ..core.schemas import CashSchema, PositionSchema, TransactionSchema
+from ..schemas import CashSchema, PositionSchema, TransactionSchema
 from ..utils.logger import logger
 
 

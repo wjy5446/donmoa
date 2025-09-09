@@ -130,7 +130,7 @@ class DominoProvider(BaseProvider):
                 balance=amount,
                 currency=self._convert_currency(currency),
                 provider=self.name,
-                collected_at=datetime.now().isoformat(),
+                collected_at=self._get_current_timestamp(),
             ))
 
         for _, row in df_positions.iterrows():
@@ -148,7 +148,7 @@ class DominoProvider(BaseProvider):
                 balance=quantity * average_price,
                 currency="KRW",
                 provider=self.name,
-                collected_at=datetime.now().isoformat(),
+                collected_at=self._get_current_timestamp(),
             ))
 
         return cash_datas
@@ -177,7 +177,7 @@ class DominoProvider(BaseProvider):
                 average_price=average_price,
                 currency="KRW",
                 provider=self.name,
-                collected_at=datetime.now().isoformat(),
+                collected_at=self._get_current_timestamp(),
             ))
 
         return positions_datas

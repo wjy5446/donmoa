@@ -2,7 +2,6 @@
 뱅크샐러드 Provider
 """
 
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Any, List
 
@@ -121,7 +120,7 @@ class BanksaladProvider(BaseProvider):
                 balance=balance,
                 currency="KRW",
                 provider=self.name,
-                collected_at=datetime.now().isoformat(),
+                collected_at=self._get_current_timestamp(),
             ))
 
         return cash_datas
@@ -162,7 +161,7 @@ class BanksaladProvider(BaseProvider):
                 currency=currency,
                 note=note,
                 provider=self.name,
-                collected_at=datetime.now().isoformat(),
+                collected_at=self._get_current_timestamp(),
             ))
 
         return transactions_datas

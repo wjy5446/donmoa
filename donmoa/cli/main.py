@@ -68,7 +68,7 @@ def status(input_dir):
     table.add_row("입력 디렉토리", input_dir)
     table.add_row("출력 디렉토리", status_info["configuration"]["output_directory"])
 
-    if status_info["last_run"]:
+    if "last_run" in status_info and status_info["last_run"]:
         table.add_row("마지막 실행", status_info["last_run"]["collection_timestamp"])
 
     console.print(table)

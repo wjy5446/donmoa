@@ -169,6 +169,11 @@ class BaseProvider(ABC):
         except (ValueError, TypeError):
             return 0.0
 
+    def _get_current_timestamp(self) -> str:
+        """현재 타임스탬프를 반환합니다."""
+        from datetime import datetime
+        return datetime.now().isoformat()
+
     # 계좌 매핑 관련
     def add_account_mapping(self, mapping: Dict[str, List[str]]) -> None:
         """계좌 매핑을 설정합니다."""

@@ -188,8 +188,3 @@ class ManualProvider(BaseProvider):
                 continue
 
         return transaction_list
-
-    def _get_current_timestamp(self) -> str:
-        """현재 타임스탬프를 반환합니다."""
-        from datetime import datetime
-        return datetime.now().isoformat()

@@ -35,7 +35,7 @@ pip install -r requirements.txt
 
 ```bash
 # 1. 데이터 파일 준비
-# data/input/ 폴더에 다음 파일들을 넣어주세요:
+# data/input/YYYY-MM-DD/ 폴더에 다음 파일들을 넣어주세요:
 # - domino.mhtml (도미노 증권 포트폴리오)
 # - banksalad.xlsx (뱅크샐러드 계좌 데이터)
 # - manual.xlsx (수동 입력 데이터)
@@ -57,7 +57,7 @@ python -m donmoa --help
 
 ### 데이터 플로우
 ```
-입력 파일 → Provider 파싱 → DataFrame 변환 → 데이터 통합 → CSV 내보내기
+입력 파일 → Provider 파싱 → 스키마 변환 → 데이터 통합 → CSV 내보내기
 ```
 
 ### 핵심 컴포넌트
@@ -67,6 +67,7 @@ python -m donmoa --help
 - **DataCollector**: 여러 Provider 데이터 수집 및 통합
 - **CSVExporter**: 표준화된 CSV 파일 생성
 - **TemplateGenerator**: 수동 입력용 Excel 템플릿 생성
+- **통일된 스키마**: CashSchema, PositionSchema, TransactionSchema
 
 ## 📁 프로젝트 구조
 
@@ -83,11 +84,12 @@ python -m donmoa --help
 └── 📄 env.example            # 환경 변수 예시
 
 📁 data/                      # 데이터 디렉토리
-├── 📁 input/                 # 입력 파일 (domino.mhtml, banksalad.xlsx, manual.xlsx)
+├── 📁 input/                 # 입력 파일
+│   └── 📁 YYYY-MM-DD/        # 날짜별 폴더 (domino.mhtml, banksalad.xlsx, manual.xlsx)
 └── 📁 export/                # 출력 CSV 파일 (cash.csv, positions.csv, transactions.csv)
 
+📁 logs/                      # 로그 파일
 📄 requirements.txt            # Python 의존성
-📄 docker-compose.yml         # Docker 설정
 ```
 
 ## 🔧 설정
@@ -197,14 +199,14 @@ python -m donmoa --help
 ### 고급 사용법
 
 ```bash
-# 특정 Provider만 수집
-python -m donmoa collect --provider manual
-
-# 특정 날짜 폴더 지정
+# 특정 입력 디렉토리 지정
 python -m donmoa collect --input-dir data/input/2025-01-15
 
 # 출력 디렉토리 지정
 python -m donmoa collect --output-dir data/export/custom
+
+# 설정 파일 지정
+python -m donmoa collect --config custom_config.yaml
 ```
 
 ### Python API 사용
@@ -223,29 +225,6 @@ if result['status'] == 'success':
     print(f"성공! {result['total_records']}개 레코드 처리")
     for file_type, file_path in result['exported_files'].items():
         print(f"{file_type}: {file_path}")
-```
-
-## 🧪 테스트
-
-```bash
-# 파일 파싱 테스트
-python tests/test_file_parsing.py
-
-# 배포 환경 기능 테스트
-python tests/test_deployment.py
-```
-
-## 🐳 Docker 배포
-
-```bash
-# Docker Compose로 실행
-docker-compose up -d
-
-# 로그 확인
-docker-compose logs -f
-
-# 중지
-docker-compose down
 ```
 
 ## 🚨 문제 해결

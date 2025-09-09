@@ -1,5 +1,5 @@
 """
-뱅크샐러드 Provider - 공통 스키마 출력
+뱅크샐러드 Provider
 """
 
 from datetime import datetime
@@ -30,8 +30,8 @@ class BanksaladProvider(BaseProvider):
             workbook = openpyxl.load_workbook(file_path, data_only=True)
 
             dict_datas = {
-                "financial_status": None,
-                "expenses_records": None,
+                "financial_status": pd.DataFrame(),
+                "expenses_records": pd.DataFrame(),
             }
 
             #########################################################
@@ -39,7 +39,7 @@ class BanksaladProvider(BaseProvider):
             #########################################################
             if "뱅샐현황" not in workbook.sheetnames:
                 logger.error("뱅샐현황 시트를 찾을 수 없습니다")
-                return []
+                return dict_datas
 
             sheet = workbook["뱅샐현황"]
 
@@ -52,7 +52,7 @@ class BanksaladProvider(BaseProvider):
 
             if not header_cell:
                 logger.error("3.재무현황 헤더를 찾을 수 없습니다")
-                return []
+                return dict_datas
 
             # 재무현황 테이블 파싱
             table_start_row = header_cell.row + 3
@@ -85,7 +85,10 @@ class BanksaladProvider(BaseProvider):
 
         except Exception as e:
             logger.error(f"데이터 파싱 실패: {e}")
-            return {}
+            return {
+                "financial_status": pd.DataFrame(),
+                "expenses_records": pd.DataFrame()
+            }
 
     def parse_cash(self, data: Dict[str, pd.DataFrame]) -> List[CashSchema]:
         """현금 데이터를 파싱합니다"""
@@ -112,7 +115,7 @@ class BanksaladProvider(BaseProvider):
                 continue
 
             cash_datas.append(CashSchema(
-                date=datetime.now().isoformat(),
+                date=datetime.now().strftime("%Y-%m-%d"),
                 category=self._get_category_type(category_type),
                 account=account_name,
                 balance=balance,
@@ -123,11 +126,11 @@ class BanksaladProvider(BaseProvider):
 
         return cash_datas
 
-    def parse_positions(self, data: Dict[str, Any]) -> List[PositionSchema]:
+    def parse_positions(self, data: Dict[str, pd.DataFrame]) -> List[PositionSchema]:
         """포지션 데이터를 파싱합니다"""
         return []
 
-    def parse_transactions(self, data: Dict[str, Any]) -> List[TransactionSchema]:
+    def parse_transactions(self, data: Dict[str, pd.DataFrame]) -> List[TransactionSchema]:
         """거래내역 데이터를 파싱합니다"""
         df_expenses_records = data["expenses_records"]
 

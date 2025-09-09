@@ -55,6 +55,7 @@ class DataCollector:
             latest_date, latest_folder = date_folders[-1]
             logger.info(f"가장 최근 날짜 폴더 선택: {latest_date} ({latest_folder})")
             target_folder = latest_folder
+        logger.info("")
 
         if provider == 'all':
             return self._collect_all_providers(target_folder)
@@ -73,6 +74,21 @@ class DataCollector:
             for records in collected_data.values()
             if isinstance(records, list)
         )
+        # 통합된 데이터의 각 데이터 타입별 행 수를 계산하여 summary에 포함
+        data_type_counts = {}
+        for data_type, records in collected_data.items():
+            if isinstance(records, list):
+                data_type_counts[data_type] = len(records)
+            else:
+                data_type_counts[data_type] = 0
+
+        # summary 정보를 로그로 출력
+        logger.info("="*50)
+        logger.info("🔍 수집 요약")
+        logger.info("="*50)
+
+        logger.info(f"✅ Provider {successful_providers}/{total_providers}개 성공, 총 {total_records}개 레코드 📊")
+        logger.info(f"💵 현금: {data_type_counts['cash']}건, 📈 포지션: {data_type_counts['positions']}건, 💳 거래: {data_type_counts['transactions']}건")
 
         return {
             "total_providers": total_providers,
@@ -126,6 +142,7 @@ class DataCollector:
         # 각 Provider에서 데이터 수집
         for provider in self.providers:
             try:
+                logger.info(f"<🔍 {provider.name}: 데이터 수집 시작>")
                 provider_data = provider.collect_all(input_dir)
 
                 collected_data[provider.name] = provider_data
@@ -145,11 +162,8 @@ class DataCollector:
         self._set_date_for_schemas(integrated_data, input_dir)
 
         # 통합 결과 로그
-        counts = {data_type: len(records) for data_type, records in integrated_data.items()}
-        logger.info(
-            f"✅ 데이터 통합 완료: cash({counts['cash']}), "
-            f"positions({counts['positions']}), transactions({counts['transactions']})"
-        )
+        logger.info("데이터 통합 완료")
+        logger.info("")
 
         return integrated_data
 

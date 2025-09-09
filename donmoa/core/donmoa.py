@@ -17,14 +17,20 @@ class Donmoa:
     """Donmoa 메인 클래스"""
 
     def __init__(self):
+        logger.info("="*50)
+        logger.info("✨ 설정을 수행합니다... ✨")
+        logger.info("="*50)
         self.data_collector = DataCollector()
         self.csv_exporter = CSVExporter()
 
         self._register_default_providers()
+        logger.info("")
 
     def run_full_workflow(self, input_dir: str = "data/input", output_dir: Optional[Path] = None) -> Dict[str, Any]:
         """전체 워크플로우를 실행합니다."""
-        logger.info("✅ Donmoa 워크플로우 시작")
+        logger.info("="*50)
+        logger.info("🚀 Donmoa 워크플로우 시작")
+        logger.info("="*50)
 
         try:
             # 1. 데이터 수집 (통합된 데이터)
@@ -116,6 +122,11 @@ class Donmoa:
             from ..providers.banksalad import BanksaladProvider
             banksalad_provider = BanksaladProvider("banksalad", full_config)
             self.add_provider(banksalad_provider)
+
+            # 수동 입력 Provider 등록
+            from ..providers.manual import ManualProvider
+            manual_provider = ManualProvider("manual", full_config)
+            self.add_provider(manual_provider)
 
         except Exception as e:
             logger.warning(f"기본 Provider 등록 실패: {e}")

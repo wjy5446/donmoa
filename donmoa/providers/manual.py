@@ -189,18 +189,6 @@ class ManualProvider(BaseProvider):
 
         return transaction_list
 
-    def _find_input_file(self, input_dir: Path) -> Optional[Path]:
-        """수동 입력 파일을 찾습니다."""
-        if not input_dir.exists():
-            return None
-
-        # manual.xlsx 파일 찾기
-        manual_file = input_dir / "manual.xlsx"
-        if manual_file.exists():
-            return manual_file
-
-        return None
-
     def _get_current_timestamp(self) -> str:
         """현재 타임스탬프를 반환합니다."""
         from datetime import datetime

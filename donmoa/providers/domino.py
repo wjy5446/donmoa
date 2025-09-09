@@ -1,5 +1,5 @@
 """
-도미노 증권 Provider - 간소화된 구조 (설정 파일 호환)
+도미노 증권 Provider
 """
 
 import re
@@ -36,7 +36,8 @@ class DominoProvider(BaseProvider):
             soup = BeautifulSoup(content, 'html.parser')
 
             dict_datas = {
-                "cash": None,
+                "cash": pd.DataFrame(),
+                "positions": pd.DataFrame()
             }
 
             #########################################################
@@ -52,7 +53,6 @@ class DominoProvider(BaseProvider):
                     spans = li.find_all("span")
                     if len(spans) >= 3:
                         currency = spans[2].get_text(strip=True)
-
                         value_text = spans[-1].get_text(strip=True)
                         amount = self._extract_number(value_text)
                         cash_datas.append([currency, amount])
@@ -64,12 +64,12 @@ class DominoProvider(BaseProvider):
             positions_tables = soup.find_all('table')
             if positions_tables:
                 positions_headers = ["account", "name", "ticker", "quantity", "average_price"]
+                positions_datas = []
 
                 for table in positions_tables:
                     rows = table.find_all('tr')
-
                     tmp_asset_info = {}
-                    positions_datas = []
+
                     for row in rows:
                         cells = row.find_all('td')
 
@@ -108,9 +108,12 @@ class DominoProvider(BaseProvider):
 
         except Exception as e:
             logger.error(f"데이터 파싱 실패: {e}")
-            return {}
+            return {
+                "cash": pd.DataFrame(),
+                "positions": pd.DataFrame()
+            }
 
-    def parse_cash(self, data: Dict[str, Any]) -> List[CashSchema]:
+    def parse_cash(self, data: Dict[str, pd.DataFrame]) -> List[CashSchema]:
         """현금 데이터를 파싱합니다"""
         df_cash = data["cash"]
         df_positions = data["positions"]
@@ -121,7 +124,7 @@ class DominoProvider(BaseProvider):
             amount = row["amount"]
 
             cash_datas.append(CashSchema(
-                date=datetime.now().isoformat(),
+                date=datetime.now().strftime("%Y-%m-%d"),
                 category="증권",
                 account="증권",
                 balance=amount,
@@ -139,7 +142,7 @@ class DominoProvider(BaseProvider):
                 continue
 
             cash_datas.append(CashSchema(
-                date=datetime.now().isoformat(),
+                date=datetime.now().strftime("%Y-%m-%d"),
                 category="증권",
                 account=name,
                 balance=quantity * average_price,
@@ -150,7 +153,7 @@ class DominoProvider(BaseProvider):
 
         return cash_datas
 
-    def parse_positions(self, data: Dict[str, Any]) -> List[PositionSchema]:
+    def parse_positions(self, data: Dict[str, pd.DataFrame]) -> List[PositionSchema]:
         """포지션 데이터를 파싱합니다"""
         df_positions = data["positions"]
 
@@ -166,7 +169,7 @@ class DominoProvider(BaseProvider):
                 continue
 
             positions_datas.append(PositionSchema(
-                date=datetime.now().isoformat(),
+                date=datetime.now().strftime("%Y-%m-%d"),
                 account=account,
                 name=name,
                 ticker=ticker,
@@ -179,7 +182,7 @@ class DominoProvider(BaseProvider):
 
         return positions_datas
 
-    def parse_transactions(self, data: Dict[str, Any]) -> TransactionSchema:
+    def parse_transactions(self, data: Dict[str, pd.DataFrame]) -> List[TransactionSchema]:
         """거래 데이터를 파싱합니다"""
         return []
 

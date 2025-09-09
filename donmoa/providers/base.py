@@ -73,16 +73,17 @@ class BaseProvider(ABC):
         하위 클래스에서 추상화 함수만 구현하면 자동으로 동작합니다.
         """
         result = {
-            "cash": None,
-            "positions": None,
-            "transactions": None
+            "cash": [],
+            "positions": [],
+            "transactions": []
         }
 
         try:
             # 지원하는 파일 찾기
             file_path = self._find_input_file(input_dir)
             if not file_path:
-                logger.warning(f"{self.name}: 지원하는 파일을 찾을 수 없습니다")
+                logger.info(f"{self.name}: 지원하는 파일을 찾을 수 없습니다 ⚠️")
+                logger.info("")
                 return result
 
             logger.info(f"{self.name}: 파일 발견 - {file_path.name}")
@@ -94,9 +95,10 @@ class BaseProvider(ABC):
             result["positions"] = self.parse_positions(raw_datas)
             result["transactions"] = self.parse_transactions(raw_datas)
 
-            logger.info(f"🟢 {self.name}: 데이터 수집 완료 - 현금:{len(result['cash'])}건, 포지션:{len(result['positions'])}건, 거래:{len(result['transactions'])}건")
+            logger.info(f"데이터 수집 완료 - 현금:{len(result['cash'])}건, 포지션:{len(result['positions'])}건, 거래:{len(result['transactions'])}건 🟢")
         except Exception as e:
-            logger.error(f"❌ {self.name} 데이터 수집 실패: {e}")
+            logger.error(f"데이터 수집 실패 : {e} ❌")
+        logger.info("")
 
         return result
 

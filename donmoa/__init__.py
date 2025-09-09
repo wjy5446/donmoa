@@ -6,8 +6,8 @@ Donmoa - 개인 자산 관리 도구
 """
 
 __version__ = "0.1.0"
-__author__ = "Donmoa Team"
-__email__ = "contact@donmoa.com"
+__author__ = "Whale"
+__email__ = "whaledev.yoon@gmail.com"
 
 from .core import Donmoa
 from .providers.base import BaseProvider

@@ -1,34 +1,32 @@
-# Donmoa 설정 파일
+# Donmoa 메인 설정 파일
 
-# 스케줄 설정
-schedule:
-  enabled: true
-  interval_hours: 24  # 24시간마다 실행
-  start_time: "09:00"  # 매일 오전 9시에 실행
-
-# 내보내기 설정
-export:
-  output_dir: "./export"  # CSV 파일 출력 디렉토리
-  file_format: "csv"      # 출력 파일 형식
-  encoding: "utf-8"       # 파일 인코딩
+# 통합 계좌 설정 파일 경로
+accounts: "config/accounts.yaml"
 
 # Provider 설정
 providers:
-  securities:
-    enabled: true
-    retry_count: 3        # 재시도 횟수
-    timeout: 30           # 타임아웃 (초)
-  bank:
-    enabled: true
-    retry_count: 3
-    timeout: 30
-  exchange:
-    enabled: true
-    retry_count: 3
-    timeout: 30
+  domino:
+    input_dir: "./data/input"
+    file_patterns: "*.mhtml"
+
+  banksalad:
+    input_dir: "./data/input"
+    file_patterns: "*.xlsx"
+
+# 내보내기 설정
+export:
+  output_dir: "./data/export"
+  file_format: "csv"
+  encoding: "utf-8"
 
 # 로깅 설정
 logging:
-  level: "INFO"           # 로그 레벨 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-  file: "./logs/donmoa.log"  # 로그 파일 경로
-  console: true           # 콘솔 출력 여부
+  level: "INFO"
+  file: "./data/logs/donmoa.log"
+  console: true
+
+# 전역 성능 설정
+performance:
+  default_retry_count: 3
+  default_timeout: 30
+  max_concurrent_providers: 5

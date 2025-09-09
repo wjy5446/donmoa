@@ -1,286 +1,205 @@
 """
-데이터 수집 핵심 클래스
+데이터 수집 클래스
 """
-import asyncio
-from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Set
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import pandas as pd
+from typing import Any, Dict, List, Optional, Union
 
 from ..providers.base import BaseProvider
-from ..utils.logger import LoggerMixin
+from ..utils.logger import logger
 from ..utils.config import config_manager
-from ..utils.encryption import encryption_manager
+from ..utils.date_utils import get_all_date_folders
+from ..schemas import CashSchema, PositionSchema, TransactionSchema
 
 
-class DataCollector(LoggerMixin):
-    """여러 기관의 데이터를 수집하는 핵심 클래스"""
+class DataCollector:
+    """데이터 수집 및 통합 클래스"""
 
-    def __init__(self, providers: Optional[List[BaseProvider]] = None):
-        """
-        DataCollector 초기화
+    DATA_TYPES = ['cash', 'positions', 'transactions']
 
-        Args:
-            providers: 데이터 수집할 Provider 목록
-        """
-        self.providers = providers or []
-        self.collected_data: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
-        self.collection_stats: Dict[str, Dict[str, Any]] = {}
-
-        # 설정에서 기본값 로드
-        self.retry_count = config_manager.get('providers.securities.retry_count', 3)
-        self.timeout = config_manager.get('providers.securities.timeout', 30)
+    def __init__(self):
+        self.account_mappings: Dict[str, Dict[str, str]] = {}
+        self.providers: List[BaseProvider] = []
 
     def add_provider(self, provider: BaseProvider) -> None:
-        """
-        Provider를 추가합니다.
-
-        Args:
-            provider: 추가할 Provider 인스턴스
-        """
+        """Provider를 추가합니다."""
         self.providers.append(provider)
-        self.logger.info(f"Provider 추가: {provider}")
+
+        # 계좌 매핑이 아직 로드되지 않았다면 로드
+        if not self.account_mappings:
+            self._set_account_mappings()
+
+        logger.info(f"Provider 추가: {provider.name}")
 
     def remove_provider(self, provider_name: str) -> None:
-        """
-        Provider를 제거합니다.
-
-        Args:
-            provider_name: 제거할 Provider 이름
-        """
+        """Provider를 제거합니다."""
         self.providers = [p for p in self.providers if p.name != provider_name]
-        self.logger.info(f"Provider 제거: {provider_name}")
+        self.account_mappings.pop(provider_name, None)
+        logger.info(f"Provider 제거: {provider_name}")
 
-    def collect_from_provider(self, provider: BaseProvider) -> Dict[str, List[Dict[str, Any]]]:
-        """
-        단일 Provider에서 데이터를 수집합니다.
+    def collect(self, input_dir: Path, provider: Optional[str] = None) -> Dict[str, List[Dict[str, Any]]]:
+        """데이터를 수집합니다."""
+        provider = provider or 'all'
 
-        Args:
-            provider: 데이터를 수집할 Provider
+        # 입력 디렉토리가 직접 날짜 폴더인지 확인
+        from ..utils.date_utils import extract_date_from_folder_name
+        folder_date = extract_date_from_folder_name(input_dir)
 
-        Returns:
-            수집된 데이터
-        """
-        start_time = datetime.now()
-        provider_data = {}
-
-        try:
-            self.logger.info(f"{provider.name}에서 데이터 수집 시작")
-
-            # Provider에서 모든 데이터 수집
-            provider_data = provider.collect_all_data()
-
-            # 수집 통계 기록
-            collection_time = datetime.now() - start_time
-            self.collection_stats[provider.name] = {
-                'status': 'success',
-                'collection_time': collection_time.total_seconds(),
-                'data_count': sum(len(data) for data in provider_data.values()),
-                'timestamp': datetime.now()
-            }
-
-            self.logger.info(f"{provider.name} 데이터 수집 완료: {collection_time.total_seconds():.2f}초")
-
-        except Exception as e:
-            self.logger.error(f"{provider.name} 데이터 수집 실패: {e}")
-            self.collection_stats[provider.name] = {
-                'status': 'error',
-                'error_message': str(e),
-                'collection_time': (datetime.now() - start_time).total_seconds(),
-                'timestamp': datetime.now()
-            }
-
-        return provider_data
-
-    def collect_all_data(self, use_async: bool = True) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
-        """
-        모든 Provider에서 데이터를 수집합니다.
-
-        Args:
-            use_async: 비동기 수집 사용 여부
-
-        Returns:
-            모든 Provider의 수집된 데이터
-        """
-        if not self.providers:
-            self.logger.warning("수집할 Provider가 없습니다")
-            return {}
-
-        self.logger.info(f"{len(self.providers)}개 Provider에서 데이터 수집 시작")
-
-        if use_async and len(self.providers) > 1:
-            return self._collect_async()
+        if folder_date:
+            # 직접 지정된 폴더가 날짜 폴더인 경우
+            logger.info(f"지정된 날짜 폴더 사용: {folder_date} ({input_dir})")
+            target_folder = input_dir
         else:
-            return self._collect_sync()
+            # 가장 최근 날짜 폴더 찾기
+            date_folders = get_all_date_folders(input_dir)
+            if not date_folders:
+                logger.error(f"날짜 폴더를 찾을 수 없습니다: {input_dir}")
+                return {data_type: [] for data_type in self.DATA_TYPES}
 
-    def _collect_sync(self) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
-        """동기적으로 데이터를 수집합니다."""
-        for provider in self.providers:
-            try:
-                provider_data = self.collect_from_provider(provider)
-                if provider_data:
-                    self.collected_data[provider.name] = provider_data
-            except Exception as e:
-                self.logger.error(f"{provider.name} 동기 수집 실패: {e}")
+            latest_date, latest_folder = date_folders[-1]
+            logger.info(f"가장 최근 날짜 폴더 선택: {latest_date} ({latest_folder})")
+            target_folder = latest_folder
+        logger.info("")
 
-        return self.collected_data
+        if provider == 'all':
+            return self._collect_all_providers(target_folder)
+        else:
+            return self._collect_single_provider(target_folder, provider)
 
-    def _collect_async(self) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
-        """비동기적으로 데이터를 수집합니다."""
-        with ThreadPoolExecutor(max_workers=min(len(self.providers), 5)) as executor:
-            # 각 Provider에 대해 수집 작업 제출
-            future_to_provider = {
-                executor.submit(self.collect_from_provider, provider): provider
-                for provider in self.providers
-            }
+    def get_collection_summary(self, collected_data: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
+        """수집 요약 정보를 반환합니다."""
 
-            # 완료된 작업들 처리
-            for future in as_completed(future_to_provider):
-                provider = future_to_provider[future]
-                try:
-                    provider_data = future.result()
-                    if provider_data:
-                        self.collected_data[provider.name] = provider_data
-                except Exception as e:
-                    self.logger.error(f"{provider.name} 비동기 수집 실패: {e}")
-
-        return self.collected_data
-
-    def get_collection_summary(self) -> Dict[str, Any]:
-        """
-        데이터 수집 요약 정보를 반환합니다.
-
-        Returns:
-            수집 요약 정보
-        """
         total_providers = len(self.providers)
-        successful_providers = sum(
-            1 for stats in self.collection_stats.values()
-            if stats.get('status') == 'success'
-        )
+        successful_providers = len([p for p in self.providers if p.name in collected_data])
+        failed_providers = total_providers - successful_providers
 
-        total_data_count = sum(
-            stats.get('data_count', 0)
-            for stats in self.collection_stats.values()
-            if stats.get('status') == 'success'
+        total_records = sum(
+            len(records)
+            for records in collected_data.values()
+            if isinstance(records, list)
         )
+        # 통합된 데이터의 각 데이터 타입별 행 수를 계산하여 summary에 포함
+        data_type_counts = {}
+        for data_type, records in collected_data.items():
+            if isinstance(records, list):
+                data_type_counts[data_type] = len(records)
+            else:
+                data_type_counts[data_type] = 0
 
-        avg_collection_time = sum(
-            stats.get('collection_time', 0)
-            for stats in self.collection_stats.values()
-            if stats.get('status') == 'success'
-        ) / max(successful_providers, 1)
+        # summary 정보를 로그로 출력
+        logger.info("="*50)
+        logger.info("🔍 수집 요약")
+        logger.info("="*50)
+
+        logger.info(f"✅ Provider {successful_providers}/{total_providers}개 성공, 총 {total_records}개 레코드 📊")
+        logger.info(f"💵 현금: {data_type_counts['cash']}건, 📈 포지션: {data_type_counts['positions']}건, 💳 거래: {data_type_counts['transactions']}건")
 
         return {
-            'total_providers': total_providers,
-            'successful_providers': successful_providers,
-            'failed_providers': total_providers - successful_providers,
-            'success_rate': (successful_providers / total_providers * 100) if total_providers > 0 else 0,
-            'total_data_count': total_data_count,
-            'average_collection_time': avg_collection_time,
-            'collection_timestamp': datetime.now(),
-            'provider_details': self.collection_stats
+            "total_providers": total_providers,
+            "successful_providers": successful_providers,
+            "failed_providers": failed_providers,
+            "success_rate": (successful_providers / total_providers * 100) if total_providers > 0 else 0,
+            "total_records": total_records
         }
 
-    def validate_collected_data(self) -> Dict[str, List[str]]:
-        """
-        수집된 데이터의 유효성을 검증합니다.
+    def _set_account_mappings(self) -> None:
+        """설정에서 계좌 매핑 정보를 로드합니다."""
+        try:
+            accounts = config_manager.get_accounts()
 
-        Returns:
-            검증 결과 (오류 메시지 목록)
-        """
-        validation_errors = {}
+            for account in accounts:
+                account_name = account.get("name")
+                mapping_names = account.get("mapping_name", [])
 
-        for provider_name, provider_data in self.collected_data.items():
-            errors = []
+                # 문자열을 리스트로 변환
+                if isinstance(mapping_names, str):
+                    mapping_names = [mapping_names]
 
-            # 필수 데이터 타입 확인
-            required_types = ['balances', 'transactions', 'positions']
-            for data_type in required_types:
-                if data_type not in provider_data:
-                    errors.append(f"필수 데이터 타입 누락: {data_type}")
-                    continue
+                # 각 매핑명을 모든 Provider에 추가
+                for provider in self.providers:
+                    provider.add_account_mapping({account_name: mapping_names})
+        except Exception as e:
+            logger.warning(f"계좌 매핑 설정 실패: {e}")
 
-                if not isinstance(provider_data[data_type], list):
-                    errors.append(f"데이터 타입 오류: {data_type}이 리스트가 아님")
-                    continue
+    def _collect_all_providers(
+        self,
+        input_dir: Path
+    ) -> Dict[str, Union[List[CashSchema], List[PositionSchema], List[TransactionSchema]]]:
+        """모든 Provider에서 데이터를 수집하고 통합합니다."""
+        collected_data = {}
 
-                # 데이터 구조 검증
-                if provider_data[data_type]:
-                    sample_item = provider_data[data_type][0]
-                    if not isinstance(sample_item, dict):
-                        errors.append(f"데이터 항목이 딕셔너리가 아님: {data_type}")
+        # 각 Provider에서 데이터 수집
+        for provider in self.providers:
+            try:
+                logger.info(f"<🔍 {provider.name}: 데이터 수집 시작>")
+                provider_data = provider.collect_all(input_dir)
 
-            if errors:
-                validation_errors[provider_name] = errors
+                collected_data[provider.name] = provider_data
+            except Exception as e:
+                logger.error(f"❌ {provider.name}: {e}")
 
-        return validation_errors
+        # 데이터 통합
+        integrated_data = {data_type: [] for data_type in self.DATA_TYPES}
 
-    def get_data_statistics(self) -> Dict[str, Dict[str, Any]]:
-        """
-        수집된 데이터의 통계 정보를 반환합니다.
+        for provider_data in collected_data.values():
+            if provider_data:
+                for data_type in self.DATA_TYPES:
+                    if data_type in provider_data and provider_data[data_type]:
+                        integrated_data[data_type].extend(provider_data[data_type])
 
-        Returns:
-            데이터 통계 정보
-        """
-        stats = {}
+        # 폴더 날짜를 스키마에 설정
+        self._set_date_for_schemas(integrated_data, input_dir)
 
-        for provider_name, provider_data in self.collected_data.items():
-            provider_stats = {}
+        # 통합 결과 로그
+        logger.info("데이터 통합 완료")
+        logger.info("")
 
-            for data_type, data_list in provider_data.items():
-                if isinstance(data_list, list) and data_list:
-                    provider_stats[data_type] = {
-                        'count': len(data_list),
-                        'sample_keys': list(data_list[0].keys()) if data_list else [],
-                        'last_updated': datetime.now()
-                    }
-                else:
-                    provider_stats[data_type] = {
-                        'count': 0,
-                        'sample_keys': [],
-                        'last_updated': datetime.now()
-                    }
+        return integrated_data
 
-            stats[provider_name] = provider_stats
+    def _collect_single_provider(
+        self,
+        input_dir: Path,
+        provider_name: str
+    ) -> Dict[str, Union[List[CashSchema], List[PositionSchema], List[TransactionSchema]]]:
+        """특정 Provider에서 데이터를 수집합니다."""
+        # Provider 찾기
+        target_provider = next((p for p in self.providers if p.name == provider_name), None)
 
-        return stats
-
-    def clear_collected_data(self) -> None:
-        """수집된 데이터를 초기화합니다."""
-        self.collected_data.clear()
-        self.collection_stats.clear()
-        self.logger.info("수집된 데이터 초기화 완료")
-
-    def export_data_summary(self, output_path: Optional[Path] = None) -> Path:
-        """
-        데이터 수집 요약을 파일로 내보냅니다.
-
-        Args:
-            output_path: 출력 파일 경로 (None이면 자동 생성)
-
-        Returns:
-            출력 파일 경로
-        """
-        if output_path is None:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_path = Path(f"collection_summary_{timestamp}.json")
-
-        summary = {
-            'collection_summary': self.get_collection_summary(),
-            'data_statistics': self.get_data_statistics(),
-            'validation_errors': self.validate_collected_data(),
-            'export_timestamp': datetime.now().isoformat()
-        }
+        if target_provider is None:
+            logger.error(f"Provider를 찾을 수 없습니다: {provider_name}")
+            return {data_type: [] for data_type in self.DATA_TYPES}
 
         try:
-            import json
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(summary, f, ensure_ascii=False, indent=2, default=str)
-
-            self.logger.info(f"데이터 수집 요약 내보내기 완료: {output_path}")
-            return output_path
+            provider_data = target_provider.collect_all(input_dir)
+            if provider_data:
+                # 폴더 날짜를 스키마에 설정
+                self._set_date_for_schemas(provider_data, input_dir)
+                logger.info(f"✅ {provider_name}: {len(provider_data)}개 데이터 타입 수집")
+                return provider_data
+            else:
+                logger.warning(f"⚠️ {provider_name}: 데이터 없음")
         except Exception as e:
-            self.logger.error(f"데이터 수집 요약 내보내기 실패: {e}")
-            raise
+            logger.error(f"❌ {provider_name}: {e}")
+
+        return {data_type: [] for data_type in self.DATA_TYPES}
+
+    def _set_date_for_schemas(self, data: Dict[str, List[Any]], input_dir: Path) -> None:
+        """폴더 이름에서 추출한 날짜를 스키마의 date 필드에 설정합니다."""
+        from ..utils.date_utils import extract_date_from_folder_name
+
+        folder_date = extract_date_from_folder_name(input_dir)
+
+        if not folder_date:
+            logger.warning(f"폴더에서 날짜를 추출할 수 없습니다: {input_dir}")
+            return
+
+        # 각 데이터 타입별로 date 필드 설정
+        for data_type, records in data.items():
+            if not records:
+                continue
+            if data_type == 'transactions':
+                continue
+
+            for record in records:
+                if hasattr(record, 'date'):
+                    record.date = folder_date
+                    logger.debug(f"{data_type} 레코드 date 설정: {folder_date}")

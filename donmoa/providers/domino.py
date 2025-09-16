@@ -22,9 +22,9 @@ class DominoProvider(BaseProvider):
     def __init__(self, name: str = "domino_securities", config: Optional[Dict[str, Any]] = None):
         super().__init__(name, config)
 
-    def get_supported_extensions(self) -> List[str]:
-        """지원하는 파일 확장자 목록을 반환합니다."""
-        return ["mhtml"]
+    def get_supported_names(self) -> List[str]:
+        """지원하는 파일 이름 목록을 반환합니다."""
+        return ["domino.mhtml"]
 
     def parse_raw(self, file_path: Path) -> Dict[str, pd.DataFrame]:
         """원본 데이터를 파싱합니다."""

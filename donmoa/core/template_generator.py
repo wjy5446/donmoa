@@ -111,9 +111,6 @@ class TemplateGenerator:
         for col in range(1, len(headers) + 1):
             ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 20
 
-        # 예시 데이터 행 추가 (2-4행)
-        self._add_example_data(ws, schema_class, headers)
-
         # 테두리 추가
         self._add_borders(ws, len(headers), 4)
 

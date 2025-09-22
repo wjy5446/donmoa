@@ -1,6 +1,6 @@
 *.mhtml
 *.xlsx
-
+accounts.yaml
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

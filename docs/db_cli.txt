@@ -1,0 +1,102 @@
+# Donmoa 데이터 스키마 정리
+
+CLI 코드를 분석한 결과, Donmoa는 다음과 같은 3가지 표준화된 데이터 스키마를 생성합니다:
+
+## 1. 현금 데이터 (CashSchema) - cash.csv
+
+### 필드 구성
+| 필드명 | 타입 | 설명 | 예시 |
+|--------|------|------|------|
+| `date` | string | 날짜 (YYYY-MM-DD) | "2025-09-09" |
+| `category` | string | 자산 카테고리 | "증권", "은행", "페이" |
+| `account` | string | 통합 계좌명 | "통합증권", "생활비통장-국민" |
+| `balance` | float | 잔액 | 1591234.0 |
+| `currency` | string | 통화 (기본값: KRW) | "KRW", "USD", "JPY" |
+| `provider` | string | 데이터 출처 | "domino", "banksalad", "manual" |
+| `collected_at` | string | 수집 시각 (ISO 형식) | "2025-09-09T23:12:27.076435" |
+
+### 실제 데이터 예시
+```csv구
+date,category,account,balance,currency,provider,collected_at
+2025-09-09,증권,통합증권,1591234.0,KRW,domino,2025-09-09T23:12:27.076435
+2025-09-09,증권,통합증권,3306.93,USD,domino,2025-09-09T23:12:27.076435
+2025-09-09,은행,생활비통장-국민,604456.0,KRW,banksalad,2025-09-09T23:12:27.426373
+2025-09-09,페이,카카오페이,8880.0,KRW,banksalad,2025-09-09T23:12:27.426373
+```
+
+## 2. 포지션 데이터 (PositionSchema) - positions.csv
+
+### 필드 구성
+| 필드명 | 타입 | 설명 | 예시 |
+|--------|------|------|------|
+| `date` | string | 날짜 (YYYY-MM-DD) | "2025-09-09" |
+| `account` | string | 통합 계좌명 | "해외배당-키움", "퇴직연금-삼성" |
+| `name` | string | 자산명 | "팔란티어", "TIGER 미국나스닥100" |
+| `ticker` | string | 티커/종목코드 | "PLTR", "133690" |
+| `quantity` | float | 보유 수량 | 8.0, 199.0 |
+| `average_price` | float | 평균 단가 | 225902.0, 10035.0 |
+| `currency` | string | 통화 (기본값: KRW) | "KRW" |
+| `provider` | string | 데이터 출처 | "domino", "manual" |
+| `collected_at` | string | 수집 시각 (ISO 형식) | "2025-09-09T23:12:27.078429" |
+
+### 실제 데이터 예시
+```csv
+date,account,name,ticker,quantity,average_price,currency,provider,collected_at
+2025-09-09,해외배당-키움,팔란티어,PLTR,8.0,225902.0,KRW,domino,2025-09-09T23:12:27.078429
+2025-09-09,퇴직연금-삼성,KODEX 미국10년국채액티브(H),0091C0,276.0,10035.0,KRW,domino,2025-09-09T23:12:27.078429
+2025-09-09,코인-업비트,비트코인,BTC-UPBIT,0.03314015,106672397.0,KRW,domino,2025-09-09T23:12:27.081423
+```
+
+## 3. 거래 데이터 (TransactionSchema) - transactions.csv
+
+### 필드 구성
+| 필드명 | 타입 | 설명 | 예시 |
+|--------|------|------|------|
+| `date` | string | 거래 날짜/시각 | "2025-09-09T17:28:46" |
+| `account` | string | 통합 계좌명 | "Mr.Life", "생활비통장-국민" |
+| `transaction_type` | string | 거래 유형 | "지출", "수입", "이체" |
+| `amount` | float | 거래 금액 | -11900.0, 3882937.0 |
+| `category` | string | 거래 카테고리 | "식비", "급여", "생활필수" |
+| `category_detail` | string | 세부 카테고리 (선택) | "일반식비", "월급", "세탁비" |
+| `currency` | string | 통화 (기본값: KRW) | "KRW" |
+| `note` | string | 메모 (선택) | "충전기", "루지" |
+| `provider` | string | 데이터 출처 | "banksalad" |
+| `collected_at` | string | 수집 시각 (ISO 형식) | "2025-09-09T23:12:27.430363" |
+
+### 실제 데이터 예시
+```csv
+date,account,transaction_type,amount,category,category_detail,currency,note,provider,collected_at
+2025-09-09T17:28:46,Mr.Life,지출,-11900,식비,일반식비,KRW,,banksalad,2025-09-09T23:12:27.430363
+2025-08-25T07:00:48,월급통장-기업,수입,3882937,급여,미분류,KRW,,banksalad,2025-09-09T23:12:27.434349
+2025-08-25T20:54:00,생활비통장-국민,지출,-52379,생활필수,통신비,KRW,,banksalad,2025-09-09T23:12:27.433354
+```
+
+## 4. 데이터 특징
+
+### 4.1 통합 계좌 시스템
+- 각 Provider에서 수집된 원본 계좌명을 `config/accounts.yaml`의 매핑 규칙에 따라 통합 계좌명으로 변환
+- 예: "기업은행 월급통장" → "월급통장-기업"
+
+### 4.2 다중 통화 지원
+- 현금 데이터: KRW, USD, JPY 등 다양한 통화 지원
+- 포지션 데이터: 주로 KRW 기준으로 표시
+
+### 4.3 Provider별 데이터 구분
+- `provider` 필드로 데이터 출처 구분
+- `domino`: 도미노 증권 MHTML 파일
+- `banksalad`: 뱅크샐러드 Excel 파일
+- `manual`: 수동 입력 Excel 파일
+
+### 4.4 시간 정보
+- `date`: 실제 거래/보유 날짜
+- `collected_at`: 데이터 수집 시각 (ISO 8601 형식)
+
+### 4.5 파일 저장 구조
+```
+data/export/YYYYMMDD_HHMMSS/
+├── cash.csv          # 현금 데이터
+├── positions.csv     # 포지션 데이터
+└── transactions.csv  # 거래 데이터
+```
+
+이 스키마는 모든 Provider에서 동일하게 사용되며, 사용자가 다양한 금융 기관의 데이터를 통합하여 일관된 형식으로 관리할 수 있도록 설계되었습니다.

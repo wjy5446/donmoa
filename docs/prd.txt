@@ -1,0 +1,197 @@
+﻿# Donmoa 최종 PRD
+
+## 1) 개요 (Overview)
+
+Donmoa는 여러 금융기관의 자산 데이터를 **스냅샷 단위**로 업로드/정규화하여 통합 관리·분석·시각화하는 개인 자산 관리 서비스다. 
+백엔드는 Supabase 단독(Postgres + Edge Functions), 프론트는 웹(Next.js)과 모바일(React Native/Expo)를 기본으로 한다.
+
+## 2) 목표와 지표 (Goals & KPIs)
+
+* 데이터 표준화: 기관·포맷이 다른 원천 데이터를 스냅샷 표준 스키마로 통합
+* 업로드→대시보드 TTV: 업로드 후 핵심 지표 확인까지의 시간 ≤ 1분
+* 리밸런싱 적합도: 목표 비중 대비 제안 체결 후 오차 ≤ ±1%p
+* 유저 효율: 수기 입력·수정 시간 30% 절감(카테고리/템플릿/최근값 자동완성)
+
+## 3) 페르소나 (Personas)
+
+1. 자산 통합형 개인투자자: 여러 증권사·은행·해외계좌를 한 화면에서 보고 싶다.
+2. 룰 기반 리밸런서: 월 1회 정적 타깃/룰로 매수·매도 가이드를 얻고 싶다.
+3. 기록/분석형 사용자: 현금흐름, 배당, 성과 추이를 기록하고 비교하고 싶다.
+
+
+## 4) 범위 (In Scope)
+
+* 파일/CSV 스냅샷 업로드와 원샷 커밋(멱등성)
+* 대시보드(요약/시계열/비중/현금흐름/배당)
+* 리밸런싱(타깃·룰 저장, 제안 생성)
+* 종목·시세/환율 조회, 즐겨찾기, 카테고리, 대시보드 레이아웃 설정
+* 기본 인증(JWT) 및 접근 제어
+
+### 제외(Out of Scope)
+
+* 실제 주문/체결 브로커리지 연동
+* 실시간 초단위 시세(초기 단계는 일봉/일일 환율 중심)
+* 세무신고/연말정산 자동화
+
+---
+
+## 5) 사용자 여정 & 시나리오 (User Journey & Scenarios)
+
+### 5.1 온보딩
+
+1. 이메일/소셜 로그인 → 기본 통화, 초기 대시보드 카드 세트 자동 배치
+2. 예제 스냅샷 안내(샘플 CSV) → 업로드 가이드 표시
+
+### 5.2 스냅샷 업로드
+
+1. 사용자가 banksalad.xlsx/domino.mhtml/manual.csv 등 파일을 드래그&드롭
+2. 서버가 파싱·검증(필수 컬럼, 통화, 계좌·종목 매핑, 스케일 정수화)
+3. 원샷 커밋으로 `snapshots` 및 `snapshot_*` 라인을 교체(멱등 처리)
+4. 결과 요약(라인 수/경고/오류 로그) 즉시 피드백
+
+### 5.3 대시보드 확인·편집
+
+* 총자산·수익률·비중·현금흐름·배당 카드 확인
+* 거래/현금/포지션 라인 수정(PATCH) 및 카테고리 재분류
+* 레이아웃 사용자화(카드 순서/표시여부 저장)
+
+### 5.4 리밸런싱
+
+* 정적 타깃과 동적 룰을 저장
+* 제안 생성으로 계좌별 매수/매도/이체 제안 확인
+* “제안 적용 시 포트폴리오 예상 비중” 비교
+
+### 5.5 종목/즐겨찾기/현금흐름
+
+* 종목 검색/상세/메트릭(모멘텀, 변동성, 보유 성과)
+* 즐겨찾기 등록/해제 및 목록 관찰
+* 월별 수입/지출/이체 요약 및 카테고리별 통계
+
+---
+
+## 6) 기능 요구사항 (Functional Requirements)
+
+### 6.1 스냅샷 입력
+
+* 업로드: `POST /v1/snapshots/upload` (multipart/form-data: file, snapshot_date, notes)
+* 커밋: `POST /v1/snapshots/commit` (헤더+라인 **원샷 교체**, `Idempotency-Key` 지원)
+* 조회: `GET /v1/snapshots`, `GET /v1/snapshots/{id}`
+* 라인 편집: `PATCH /v1/transactions/{id}`, `PATCH /v1/cash/{id}`, `PATCH /v1/positions/{id}`
+* 정수화 규칙
+  * 금액: `amount_minor (bigint)` = 통화 스케일(예: KRW 1, USD 100 등)
+  * 수량: `qty_nano (bigint)` = 수량 × 1e9
+  * 단가: `price_nano (bigint)` = × 1e9(옵션)
+
+### 6.2 대시보드
+
+* 요약/시계열/비중: `GET /v1/dashboard/summary`, `/timeseries`, `/allocations`
+* 현금흐름·배당: `GET /v1/cashflow/summary`, `GET /v1/dividends`
+* 사용자 설정: `GET/POST /v1/dashboard/prefs` (카드·레이아웃 저장/조회)
+
+### 6.3 리밸런싱
+
+* 타깃/룰 관리: `GET/POST /v1/rebalance/targets`, `/v1/rebalance/rules`
+* 제안 생성: `POST /v1/rebalance/suggest` → 계좌별 매수/매도/이체 제안과 적용 후 비중 반환
+
+### 
+6.4 종목/가격/환율/즐겨찾기/카테고리
+
+* 종목: `GET /v1/instruments`, `/v1/instruments/{id}`, `/v1/instruments/{id}/metrics`
+* 시세·환율: `GET /v1/prices/daily`, `GET /v1/fx/daily`
+* 즐겨찾기: `POST /v1/favorites/toggle`, `GET /v1/favorites`
+* 카테고리: `GET/POST /v1/categories`, `PATCH/DELETE /v1/categories/{id}`
+
+## 7) 데이터 모델 요약 (DB Summary)
+
+### 7.1 핵심 테이블
+
+* snapshots: 스냅샷 헤더(스냅샷 ID, 날짜, 업로드 메타, 상태)
+* snapshot_cash: `(snapshot_id, account_id, currency)`별 잔액, `amount_minor`
+* snapshot_positions: `(snapshot_id, account_id, instrument_id)`별 보유, `qty_nano`, `avg_cost`, `currency`
+* snapshot_transactions: 거래 이벤트(일시/정산/타입/수량/단가/금액 등)
+* instruments / prices_daily / fx_rates_daily: 종목/일봉/일일 환율
+* ingest_logs: 업로드/커밋 검증 로그(레벨/메시지/컨텍스트)
+* users / institutions / accounts: 식별·소유 구조
+* categories / favorites / dashboard_prefs: 분류·즐겨찾기·레이아웃
+* rebalance_* / portfolios_* (선택): 타깃·룰·포트폴리오 스냅샷
+
+### 7.2 제약/키/인덱스(요지)
+
+* 스냅샷 라인 테이블은 `(snapshot_id, …)` 합성키 권장
+* 통화/수량/단가 컬럼은 정수화 스케일로 저장(반올림 일관 규칙)
+* 외래키: accounts/instruments/users 등 참조 무결성 유지
+* 조회 빈도 높은 조합(계좌×날짜, 종목×날짜)은 보조 인덱스
+
+## 8) 아키텍처 (Architecture)
+
+* Database: Supabase Postgres
+* API/Logic: Supabase Edge Functions (OpenAPI 3.1, JWT 인증, Idempotency-Key)
+* Frontend(Web): Next.js(Vercel)
+* Mobile: React Native(Expo)
+* 배포/관측: Supabase 콘솔 + Vercel analytics(기본), 로그/지표는 Supabase table(ingest_logs, audit) 활용
+
+## 9) UX 요구사항 (UX)
+
+* 업로드 UX: 드래그&드롭 → 필수 컬럼/스케일/매핑 검증 결과를 즉시 카드·토스트로 노출, 상세 로그는 “업로드 내역”에서 확인
+* 대시보드 UX: 카드형(총액/월수익률/배당/현금흐름/비중), 차트와 표 혼합, **레이아웃 사용자화**·고정
+* 리밸런싱 UX: 목표/룰 편집 → 제안표(수량/금액/수수료 가정)와 **적용 후 비중** 비교 차트
+* 종목/즐겨찾기 UX: 필터/정렬/메트릭 뷰, 즐겨찾기는 대시보드 카드와 연동
+* 접근성: 키보드 탐색/스크린리더 레이블, 색 대비 준수
+
+## 10) 비기능 요구사항 (NFRs)
+
+* 보안: Supabase Auth(JWT), Row Level Security(최소권한), PII 최소 수집
+* 멱등성: 쓰기 API는 Idempotency-Key 필수(중복 업로드 방지)
+* 성능: 업로드→대시보드 반영 ≤ 1분, 대시보드 최초 응답 p95 ≤ 1.5s
+* 가용성: DB 백업(일/주단위), 마이그레이션 롤백 플랜
+* 감사/로그: `ingest_logs`(레벨/메시지/컨텍스트), 변경 이력 최소화 저장
+* 프라이버시: 민감 데이터 마스킹, 삭제/비활성화 정책
+
+## 11) 수용 기준 (Acceptance Criteria)
+
+1. 업로드/커밋
+   * 파일 업로드 후 파싱/검증/정수화/원샷 커밋이 성공하면 **라인 요약**과 **경고/오류**가 반환된다.
+   * 동일 날짜 스냅샷은 정책에 따라 교체된다(멱등).
+
+2. 대시보드
+   * 요약·시계열·비중·현금흐름·배당이 스냅샷 기준으로 일관되게 계산된다.
+   * 사용자 지정 카드 배치가 재로그인 후에도 유지된다.
+
+3. 리밸런싱
+   * 타깃/룰 저장 후 제안 생성 시, “적용 후 비중”이 목표 대비 오차 ±1%p 이내일 것(수수료/환전 가정치 내).
+
+4. API 보안/제한
+   * 인증 실패 시 401, 유효성 실패 422, 리소스 충돌 409가 적절히 반환된다.
+
+## 12) API 표면 (OpenAPI 3.1, 요약)
+* 스냅샷
+  `POST /v1/snapshots/upload`, `POST /v1/snapshots/commit`,
+  `GET /v1/snapshots`, `GET /v1/snapshots/{id}`
+
+* 라인 편집:
+  `PATCH /v1/transactions/{id}`, `PATCH /v1/cash/{id}`, `PATCH /v1/positions/{id}`
+
+* 대시보드
+  `GET /v1/dashboard/summary`, `/v1/dashboard/timeseries`, `/v1/dashboard/allocations`, `/v1/cashflow/summary`, `/v1/dividends`, `GET/POST /v1/dashboard/prefs`
+
+* 리밸런싱
+  `GET/POST /v1/rebalance/targets`, `/v1/rebalance/rules`, `POST /v1/rebalance/suggest`
+
+* 종목/시세/환율/즐겨찾기/카테고리
+  `GET /v1/instruments`, `/v1/instruments/{id}`, `/v1/instruments/{id}/metrics`,
+  `GET /v1/prices/daily`, `GET /v1/fx/daily`,
+  `POST /v1/favorites/toggle`, `GET /v1/favorites`,
+  `GET/POST /v1/categories`, `PATCH/DELETE /v1/categories/{id}`
+
+* 보안/공통: JWT(Bearer), `Idempotency-Key`(쓰기성 API)
+
+## 13) 분석/로그/모니터링 (Telemetry)
+
+* 업로드 파이프라인 단계별 통계(행 수, 실패율, 경고 유형 Top-N)
+* 대시보드 카드별 조회/체류 시간
+* 리밸런싱 제안→적용까지의 전환율(사용자 수동 반영 기준)
+
+## 14) 위험요소 & 완화 (Risks & Mitigations)
+* 입력 포맷 다양성: 파서 실패/모호 매핑 → 샘플 템플릿/자동 매핑·수정 가이드/로그
+* 시세/환율 동기화 지연: 일봉 기준 캐싱/지연표시 배지
+* 데이터 정합성: 정수화 스케일 일관 규칙, 스냅샷 원샷 교체, 검증 규칙 강화

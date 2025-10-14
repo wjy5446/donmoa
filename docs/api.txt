@@ -1,0 +1,1142 @@
+openapi: 3.1.0
+info:
+  title: Donmoa API
+  version: 1.2.0
+  summary: Supabase 단독(Edge Functions + Postgres) 아키텍처 기반 재무 스냅샷/대시보드/리밸런싱 API
+  description: |
+    - 인증: JWT (Supabase Auth)
+    - 정수화: amount_minor(통화 스케일), qty_nano(×1e9), price_nano(×1e9)
+    - Idempotency-Key 지원(쓰기성 API)
+servers:
+  - url: https://{project}.functions.supabase.co
+    variables:
+      project:
+        default: your-project-id
+security:
+  - bearerAuth: []
+tags:
+  - name: Snapshots
+  - name: Upload
+  - name: Edits
+  - name: Dashboard
+  - name: Rebalance
+  - name: Instruments
+  - name: MarketData
+  - name: Favorites
+  - name: Settings
+  - name: Categories
+  - name: Cashflow
+
+paths:
+  /v1/snapshots/commit:
+    post:
+      tags: [Snapshots]
+      summary: 스냅샷 헤더 + 라인아이템 원샷 커밋(덮어쓰기)
+      operationId: commitSnapshot
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SnapshotCommitRequest' }
+      responses:
+        '200':
+          description: 커밋 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SnapshotCommitResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '424': { $ref: '#/components/responses/FailedDependency' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /v1/snapshots/upload:
+    post:
+      tags: [Upload]
+      summary: 파일 업로드 후 서버에서 파싱→스냅샷 커밋
+      operationId: uploadSnapshotFile
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, snapshot_date]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: banksalad.xlsx | domino.mhtml | manual.xlsx | csv
+                snapshot_date:
+                  type: string
+                  format: date
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: 업로드 및 커밋 결과
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  snapshot_id: { type: integer }
+                  parsed_rows:
+                    type: object
+                    properties:
+                      cash: { type: integer }
+                      positions: { type: integer }
+                      transactions: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /v1/snapshots:
+    get:
+      tags: [Snapshots]
+      summary: 스냅샷 헤더 목록
+      operationId: listSnapshots
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+        - in: query
+          name: cursor
+          schema: { type: string }
+      responses:
+        '200':
+          description: 목록
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SnapshotListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/snapshots/{id}:
+    get:
+      tags: [Snapshots]
+      summary: 특정 스냅샷 헤더 + 라인 요약
+      operationId: getSnapshot
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: 스냅샷 상세
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SnapshotDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/transactions/{id}:
+    patch:
+      tags: [Edits]
+      summary: 거래 라인 수정
+      operationId: patchTransaction
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EditTransactionRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/Updated' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /v1/cash/{id}:
+    patch:
+      tags: [Edits]
+      summary: 현금 라인 수정
+      operationId: patchCash
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EditCashRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/Updated' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /v1/positions/{id}:
+    patch:
+      tags: [Edits]
+      summary: 포지션 라인 수정
+      operationId: patchPosition
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EditPositionRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/Updated' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /v1/dividends:
+    post:
+      tags: [Edits]
+      summary: 배당 입력
+      operationId: createDividend
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateDividendRequest' }
+      responses:
+        '200':
+          description: 생성됨
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  created: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /v1/dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: 대시보드 요약(총액/비중/월수익률 등)
+      operationId: getDashboardSummary
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: date
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: 요약
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DashboardSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/dashboard/timeseries:
+    get:
+      tags: [Dashboard]
+      summary: 시계열(총액/수익률/배당/현금흐름)
+      operationId: getTimeseries
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: metric
+          required: true
+          schema:
+            type: string
+            enum: [total_equity, return, dividend, cashflow]
+        - in: query
+          name: interval
+          schema:
+            type: string
+            enum: [day, month]
+            default: month
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: 시계열 데이터
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TimeseriesResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/dashboard/allocations:
+    get:
+      tags: [Dashboard]
+      summary: 비중표(계좌/자산군/세부자산군)
+      operationId: getAllocations
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: date
+          required: true
+          schema: { type: string, format: date }
+        - in: query
+          name: group
+          required: true
+          schema:
+            type: string
+            enum: [account, asset_class, subclass]
+      responses:
+        '200':
+          description: 비중 목록
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AllocationsResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/rebalance/targets:
+    get:
+      tags: [Rebalance]
+      summary: 목표 비중 목록(정적)
+      operationId: getRebalanceTargets
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 타겟 목록
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RebalanceTargets' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/rebalance/rules:
+    post:
+      tags: [Rebalance]
+      summary: 동적 규칙 저장(밴드/모멘텀 등)
+      operationId: saveRebalanceRules
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RebalanceRulesRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/Saved' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /v1/rebalance/suggest:
+    post:
+      tags: [Rebalance]
+      summary: 리밸런싱 제안 생성
+      operationId: createRebalanceSuggestion
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RebalanceSuggestRequest' }
+      responses:
+        '200':
+          description: 제안 결과
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RebalanceSuggestResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /v1/instruments:
+    get:
+      tags: [Instruments]
+      summary: 종목 검색/페이징
+      operationId: searchInstruments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: query
+          schema: { type: string }
+        - in: query
+          name: asset_class
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 30 }
+        - in: query
+          name: cursor
+          schema: { type: string }
+      responses:
+        '200':
+          description: 검색 결과
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstrumentList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/instruments/{id}:
+    get:
+      tags: [Instruments]
+      summary: 종목 상세
+      operationId: getInstrument
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: 상세
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Instrument' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/instruments/{id}/metrics:
+    get:
+      tags: [Instruments]
+      summary: 모멘텀/변동/보유 성과
+      operationId: getInstrumentMetrics
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: window
+          schema:
+            type: string
+            example: "1,3,6,12"
+      responses:
+        '200':
+          description: 메트릭
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstrumentMetrics' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/prices/daily:
+    get:
+      tags: [MarketData]
+      summary: 일별 가격 시계열
+      operationId: getDailyPrices
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: instrument_id
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: 가격 시계열
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DailyPrices' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/fx/daily:
+    get:
+      tags: [MarketData]
+      summary: 일별 환율 시계열
+      operationId: getDailyFx
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: base
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 3 }
+        - in: query
+          name: quote
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 3 }
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: 환율 시계열
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DailyFx' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/favorites/toggle:
+    post:
+      tags: [Favorites]
+      summary: 즐겨찾기 등록/해제
+      operationId: toggleFavorite
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instrument_id, star]
+              properties:
+                instrument_id: { type: integer }
+                star: { type: boolean }
+      responses:
+        '200':
+          description: 상태 반환
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  starred: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/favorites:
+    get:
+      tags: [Favorites]
+      summary: 즐겨찾기 목록(필터/보유여부/성과요약)
+      operationId: listFavorites
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: held
+          schema: { type: boolean }
+        - in: query
+          name: asset_class
+          schema: { type: string }
+      responses:
+        '200':
+          description: 목록
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FavoritesList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/dashboard/prefs:
+    get:
+      tags: [Settings]
+      summary: 대시보드 카드/레이아웃 설정 조회
+      operationId: getDashboardPrefs
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 설정
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DashboardPrefs' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Settings]
+      summary: 대시보드 카드/레이아웃 설정 저장
+      operationId: putDashboardPrefs
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DashboardPrefs' }
+      responses:
+        '200': { $ref: '#/components/responses/Saved' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /v1/categories:
+    get:
+      tags: [Categories]
+      summary: 카테고리 목록
+      operationId: listCategories
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 목록
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CategoryList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Categories]
+      summary: 카테고리 생성
+      operationId: createCategory
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryCreate' }
+      responses:
+        '200': { $ref: '#/components/responses/Created' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /v1/categories/{id}:
+    patch:
+      tags: [Categories]
+      summary: 카테고리 수정
+      operationId: patchCategory
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryUpdate' }
+      responses:
+        '200': { $ref: '#/components/responses/Updated' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+    delete:
+      tags: [Categories]
+      summary: 카테고리 삭제
+      operationId: deleteCategory
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { $ref: '#/components/responses/Deleted' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/cashflow/summary:
+    get:
+      tags: [Cashflow]
+      summary: 월별 수입/지출/이체 요약
+      operationId: getCashflowSummary
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: from
+          required: true
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: 요약
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CashflowSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Unauthorized:
+      description: 인증 실패
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: 리소스 없음
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: 충돌(Idempotency-Key + 상이한 Body 등)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unprocessable:
+      description: 검증 실패
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    FailedDependency:
+      description: 의존 리소스 생성 불가(정책상 금지 등)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ServerError:
+      description: 서버 오류
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Created:
+      description: 생성됨
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: { id: { type: integer }, created: { type: boolean } }
+    Updated:
+      description: 수정됨
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: { updated: { type: boolean } }
+    Deleted:
+      description: 삭제됨
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: { deleted: { type: boolean } }
+    Saved:
+      description: 저장됨
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: { saved: { type: boolean } }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+
+    Money:
+      type: object
+      properties:
+        amount_minor: { type: integer, description: '통화 스케일 적용된 정수 금액' }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+
+    SnapshotCommitRequest:
+      type: object
+      required: [snapshot_date, source]
+      properties:
+        snapshot_date: { type: string, format: date }
+        source:
+          type: string
+          enum: [cli, manual, banksalad, domino]
+        notes: { type: string }
+        cash:
+          type: array
+          items:
+            type: object
+            required: [account_external_id, currency, amount]
+            properties:
+              account_external_id: { type: string }
+              currency: { type: string }
+              amount: { type: number }
+        positions:
+          type: array
+          items:
+            type: object
+            required: [account_external_id, symbol, currency, qty]
+            properties:
+              account_external_id: { type: string }
+              symbol: { type: string }
+              currency: { type: string }
+              qty: { type: number }
+              avg_cost: { type: number }
+        transactions:
+          type: array
+          items:
+            type: object
+            required: [account_external_id, type, currency]
+            properties:
+              account_external_id: { type: string }
+              type:
+                type: string
+                enum: [buy, sell, dividend, fee, transfer, deposit, withdraw, interest, other]
+              symbol: { type: string }
+              trade_datetime: { type: string, format: date-time }
+              settle_date: { type: string, format: date }
+              qty: { type: number }
+              price: { type: number }
+              amount: { type: number, description: '부호규칙: 타입별 정책' }
+              currency: { type: string }
+              note: { type: string }
+        mapping:
+          type: object
+          properties:
+            account_map:
+              type: object
+              additionalProperties: { type: integer, description: 'accounts.id' }
+            instrument_map:
+              type: object
+              additionalProperties: { type: integer, description: 'instruments.id' }
+        options:
+          type: object
+          properties:
+            replace_same_date: { type: boolean, default: true }
+            create_missing_accounts: { type: boolean, default: true }
+            create_missing_instruments: { type: boolean, default: true }
+
+    SnapshotCommitResponse:
+      type: object
+      properties:
+        snapshot_id: { type: integer }
+        date: { type: string, format: date }
+        lines:
+          type: object
+          properties:
+            cash: { type: integer }
+            positions: { type: integer }
+            transactions: { type: integer }
+        warnings:
+          type: array
+          items: { type: string }
+        errors:
+          type: array
+          items: { type: string }
+
+    SnapshotListItem:
+      type: object
+      properties:
+        id: { type: integer }
+        date: { type: string, format: date }
+        source: { type: string }
+        notes: { type: string }
+        line_counts:
+          type: object
+          properties:
+            cash: { type: integer }
+            positions: { type: integer }
+            transactions: { type: integer }
+
+    SnapshotListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/SnapshotListItem' }
+        next_cursor: { type: string, nullable: true }
+
+    SnapshotDetail:
+      type: object
+      properties:
+        id: { type: integer }
+        date: { type: string, format: date }
+        source: { type: string }
+        notes: { type: string }
+        counts:
+          type: object
+          properties:
+            cash: { type: integer }
+            positions: { type: integer }
+            transactions: { type: integer }
+        totals_by_currency:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Money'
+              - type: object
+                properties:
+                  role: { type: string, enum: [cash, equity_value] }
+
+    EditTransactionRequest:
+      type: object
+      properties:
+        trade_datetime: { type: string, format: date-time }
+        settle_date: { type: string, format: date }
+        qty: { type: number }
+        price: { type: number }
+        amount: { type: number }
+        currency: { type: string }
+        note: { type: string }
+
+    EditCashRequest:
+      type: object
+      properties:
+        amount: { type: number }
+        currency: { type: string }
+
+    EditPositionRequest:
+      type: object
+      properties:
+        qty: { type: number }
+        avg_cost: { type: number }
+        currency: { type: string }
+
+    CreateDividendRequest:
+      type: object
+      required: [account_id, instrument_id, pay_date, amount, currency]
+      properties:
+        account_id: { type: integer }
+        instrument_id: { type: integer }
+        pay_date: { type: string, format: date }
+        amount: { type: number }
+        currency: { type: string }
+        note: { type: string }
+
+    DashboardSummary:
+      type: object
+      properties:
+        as_of: { type: string, format: date }
+        total_equity: { $ref: '#/components/schemas/Money' }
+        by_account:
+          type: array
+          items:
+            type: object
+            properties:
+              account_id: { type: integer }
+              weight: { type: number }
+              equity_minor: { type: integer }
+        by_asset_class:
+          type: array
+          items:
+            type: object
+            properties:
+              asset_class: { type: string }
+              weight: { type: number }
+        monthly_return:
+          type: object
+          properties:
+            m1: { type: number }
+            ytd: { type: number }
+        notes:
+          type: array
+          items: { type: string }
+
+    TimeseriesPoint:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        value: { type: number }
+
+    TimeseriesResponse:
+      type: object
+      properties:
+        metric: { type: string }
+        interval: { type: string }
+        series:
+          type: array
+          items: { $ref: '#/components/schemas/TimeseriesPoint' }
+
+    AllocationItem:
+      type: object
+      properties:
+        key: { type: string }
+        weight: { type: number }
+        equity_minor: { type: integer }
+
+    AllocationsResponse:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        group: { type: string }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AllocationItem' }
+
+    RebalanceTargets:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              scope: { type: string, enum: [account, global] }
+              account_id: { type: integer, nullable: true }
+              asset_class: { type: string }
+              target_pct: { type: number }
+
+    RebalanceRulesRequest:
+      type: object
+      properties:
+        rules:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [band, momentum, custom] }
+              params: { type: object, additionalProperties: true }
+
+    RebalanceSuggestRequest:
+      type: object
+      required: [as_of, target]
+      properties:
+        as_of: { type: string, format: date }
+        target:
+          type: array
+          items:
+            type: object
+            required: [scope, target_pct]
+            properties:
+              scope: { type: string, enum: [account, global] }
+              account_id: { type: integer, nullable: true }
+              asset_class: { type: string }
+              target_pct: { type: number }
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/RebalanceRulesRequest/properties/rules/items'
+
+    RebalanceTrade:
+      type: object
+      properties:
+        instrument_id: { type: integer }
+        action: { type: string, enum: [buy, sell] }
+        qty: { type: number }
+        amount_minor: { type: integer }
+        currency: { type: string }
+
+    RebalanceSuggestResponse:
+      type: object
+      properties:
+        as_of: { type: string, format: date }
+        proposals:
+          type: array
+          items:
+            type: object
+            properties:
+              account_id: { type: integer }
+              trades:
+                type: array
+                items: { $ref: '#/components/schemas/RebalanceTrade' }
+              after_weights:
+                type: object
+                additionalProperties: { type: number }
+
+    Instrument:
+      type: object
+      properties:
+        id: { type: integer }
+        symbol: { type: string }
+        name: { type: string }
+        asset_class: { type: string }
+        currency: { type: string }
+
+    InstrumentList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Instrument' }
+        next_cursor: { type: string, nullable: true }
+
+    InstrumentMetrics:
+      type: object
+      properties:
+        instrument_id: { type: integer }
+        momentum:
+          type: object
+          additionalProperties: { type: number }
+        volatility: { type: number }
+        holding_perf:
+          type: object
+          properties:
+            avg_cost: { type: number }
+            pnl_minor: { type: integer }
+
+    DailyPrices:
+      type: object
+      properties:
+        instrument_id: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              open: { type: number }
+              high: { type: number }
+              low: { type: number }
+              close: { type: number }
+              volume: { type: number }
+
+    DailyFx:
+      type: object
+      properties:
+        base: { type: string }
+        quote: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              rate: { type: number }
+
+    FavoritesList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              instrument: { $ref: '#/components/schemas/Instrument' }
+              starred_at: { type: string, format: date-time }
+              holding: { type: boolean }
+              perf:
+                type: object
+                properties:
+                  pnl_minor: { type: integer }
+                  return_pct: { type: number }
+
+    DashboardPrefs:
+      type: object
+      properties:
+        cards:
+          type: array
+          items: { type: string }
+        layout: { type: string, example: grid-2 }
+
+    Category:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        parent_id: { type: integer, nullable: true }
+
+    CategoryList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Category' }
+
+    CategoryCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        parent_id: { type: integer, nullable: true }
+
+    CategoryUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        parent_id: { type: integer, nullable: true }
+
+    CashflowSummary:
+      type: object
+      properties:
+        period: { type: object, properties: { from: { type: string, format: date }, to: { type: string, format: date } } }
+        monthly:
+          type: array
+          items:
+            type: object
+            properties:
+              month: { type: string, example: '2025-09' }
+              income_minor: { type: integer }
+              expense_minor: { type: integer }
+              transfer_minor: { type: integer }

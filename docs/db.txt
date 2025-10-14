@@ -1,0 +1,160 @@
+# Donmoa DB 개발 문서
+
+## 1) 목적 · 범위
+
+* **목적**: CLI가 생성한 `cash.csv / positions.csv / transactions.csv`를 API로 커밋하여, 조회·분석·리포트에 적합한 스냅샷 기반 DB를 제공한다.
+* **범위**: 데이터 흐름, 스키마/ERD, 테이블 역할, 컬럼 정의(1–2줄), 기본 제약/인덱스, 커밋 규칙.
+
+## 2) 데이터 흐름(Direct Commit)
+
+1. **CLI → API 업로드**(CSV 파일 또는 레코드 스트림)
+2. **서버 검증/매핑/정수화**(계좌·종목 식별, 통화 스케일 등)
+3. **트랜잭션 커밋**: `snapshots` 생성 → `snapshot_cash / snapshot_positions / snapshot_transactions` 벌크 INSERT → `ingest_logs` 기록
+
+## 3) ERD
+
+```mermaid
+erDiagram
+  %% Users / Orgs
+  users ||--o{ institutions : has
+  institutions ||--o{ accounts : has
+  users ||--o{ accounts : has
+
+  %% Snapshots
+  users ||--o{ snapshots : owns
+  snapshots ||--o{ snapshot_cash : lines
+  snapshots ||--o{ snapshot_positions : lines
+  snapshots ||--o{ snapshot_transactions : lines
+  snapshots ||--o{ ingest_logs : logs
+
+  %% Instruments & Market
+  instruments ||--o{ snapshot_positions : ref
+  instruments ||--o{ snapshot_transactions : ref
+  instruments ||--o{ prices_daily : prices
+  prices_daily }o--|| data_sources : by
+  fx_rates_daily }o--|| data_sources : by
+
+  %% Preferences / Categories / Favorites (optional)
+  users ||--o{ categories : defines
+  categories ||--o{ snapshot_transactions : classify
+  users ||--o{ favorites : stars
+  users ||--o{ dashboard_prefs : prefs
+
+  %% Rebalance / Portfolio (optional)
+  users ||--o{ rebalance_rules : owns
+  users ||--o{ rebalance_targets : owns
+  rebalance_targets ||--o{ rebalance_target_lines : items
+  users ||--o{ portfolios : owns
+  portfolios ||--o{ portfolio_accounts : maps
+  portfolio_accounts }o--|| accounts : includes
+```
+
+## 4) 커밋 규칙
+
+* **스냅샷 생성**: 업로드 1회 = `snapshots` 1행, 이후 관련 라인 아이템을 연결해 입력한다.
+* **정수화(표준)**
+
+  * 금액: `amount_minor (bigint)` = 원화 1, 미화 100 등 통화 스케일 적용
+  * 수량: `qty_nano (bigint)` = `수량 * 1e9`
+  * 단가(옵션): `price_nano (bigint)` 동일 스케일
+  * 반올림 정책은 일관되게 적용(은행가 반올림 등)
+
+## 5) 테이블 역할 & 컬럼(핵심 설명)
+
+### users
+
+* **역할**: 사용자 및 전역 설정.
+* `id uuid` 사용자 식별자. `display_name text` 표시명. `settings jsonb` 기본 통화·지역 등.
+
+### institutions
+
+* **역할**: 기관(증권/은행) 메타.
+* `id bigserial`, `user_id uuid` 소유자. `name text` 기관명. `kind text` 구분. `meta jsonb` 부가정보.
+
+### accounts
+
+* **역할**: 계좌 정의(경미한 이력 보존 가능).
+* `id bigserial`, `user_id uuid`, `institution_id bigint`.
+* `name text` 계좌명. `currency text` 기본 통화. `type text`. `meta jsonb`.
+* `valid_from date`, `valid_to date` 변경 이력 구간.
+
+### instruments
+
+* **역할**: 종목/자산 마스터.
+* `id bigserial`, `symbol text`, `isin text`, `name text`.
+* `asset_class text`, `subclass text`, `currency text`, `metadata jsonb`.
+* `valid_from/valid_to date` 유효기간.
+
+### snapshots
+
+* **역할**: 커밋 헤더(불변).
+* `id bigserial`, `user_id uuid`, `snapshot_date date`, `source text`, `status text`, `notes text`, `created_at timestamptz`.
+
+  * 한 업로드 내에서 라인 아이템과 동일 트랜잭션으로 생성한다.
+
+### snapshot_cash
+
+* **역할**: 기준일의 **계좌×통화** 현금 잔액.
+* 키: `(snapshot_id, account_id, currency)`.
+* `amount_minor bigint` 통화 스케일 적용 잔액.
+
+### snapshot_positions
+
+* **역할**: 기준일의 **계좌×종목** 보유.
+* 키: `(snapshot_id, account_id, instrument_id)`.
+* `qty_nano bigint` 수량(정수화). `avg_cost numeric(38,8) null` 평단(또는 `avg_cost_minor bigint` 채택 가능).
+* `currency text` 통화. `tags jsonb` 라벨.
+
+### snapshot_transactions
+
+* **역할**: 거래 이벤트(참조/분석용).
+* 추천 키: `(snapshot_id, account_id, txn_id)`(없으면 surrogate + unique).
+* `trade_datetime timestamptz`, `settle_date date`.
+* `type text`(buy/sell/dividend/fee/transfer 등), `instrument_id bigint null`.
+* `qty_nano bigint null`, `price_nano bigint null`, `amount_minor bigint null`, `currency text`.
+* `category_id bigint null`, `note text`, `raw jsonb` 원본 보존.
+
+### ingest_logs
+
+* **역할**: 커밋 시 검증/보정 로그.
+* `id bigserial`, `snapshot_id bigint`, `level text`, `message text`, `context jsonb`, `created_at timestamptz`.
+
+### prices_daily
+
+* **역할**: 일자별 평가가격/배당.
+* 키: `(instrument_id, price_date)`.
+* `close numeric(38,8)`(또는 정수화), `dividend numeric null`, `splits text null`, `source_id bigint`.
+
+### fx_rates_daily
+
+* **역할**: 환율(1 quote → base).
+* 키: `(base_currency, quote_currency, rate_date)`.
+* `rate numeric(38,10)`(또는 ppm 정수화), `source_id bigint`.
+
+### data_sources
+
+* **역할**: 시세/환율/거래 공급자.
+* `id bigserial`, `name text`, `kind text`(price/fx/txn), `meta jsonb`.
+
+### categories (선택)
+
+* **역할**: 거래 분류.
+* `id bigserial`, `user_id uuid`, `name text`, `parent_id bigint`, `kind text`, `meta jsonb`.
+
+### favorites / dashboard_prefs (선택)
+
+* **역할**: 즐겨찾기/대시보드 설정.
+* `favorites(user_id uuid, instrument_id bigint, created_at timestamptz)`
+* `dashboard_prefs(user_id uuid, layout jsonb, updated_at timestamptz)`
+
+### rebalance_* / portfolios_* (선택)
+
+* **역할**: 목표 비중/룰, 포트폴리오 집계.
+* `rebalance_rules / rebalance_targets / rebalance_target_lines`
+* `portfolios / portfolio_accounts`
+
+## 6) 운영 메모
+
+* 커밋 실패/경고는 `ingest_logs`에 남긴다(오류 코드·행 번호 등 컨텍스트 포함).
+* 계좌/종목 신규 생성 정책은 사전에 합의(자동 생성 또는 업로드 차단).
+* 필요 시 스냅샷/거래/가격 테이블에 **월 단위 RANGE 파티셔닝**을 적용해 아카이브·백업을 단순화한다.

@@ -1,1 +1,0 @@
-﻿manual_provider.py

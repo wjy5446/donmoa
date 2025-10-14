@@ -1,1 +1,0 @@
-﻿banksalad_provider.py

@@ -30,3 +30,8 @@ performance:
   default_retry_count: 3
   default_timeout: 30
   max_concurrent_providers: 5
+
+# API 설정 (upload 명령어 사용시 필요)
+api:
+  url: "https://your-project-id.functions.supabase.co"
+  token: "your-jwt-token-here"

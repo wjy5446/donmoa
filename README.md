@@ -1,280 +1,205 @@
-# Donmoa - 개인 자산 관리 도구
+# Donmoa
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+개인 자산 관리 플랫폼
 
-Donmoa는 여러 금융 기관의 데이터를 통합하여 개인이 손쉽게 관리할 수 있도록 돕는 개인 자산 관리 도구입니다.
+## 프로젝트 구조
 
-## ✨ 주요 기능
+```
+donmoa/
+├── cli/                    # Python CLI (데이터 수집)
+│   └── donmoa/
+├── packages/
+│   ├── shared/            # 공통 타입 (TypeScript)
+│   ├── database/          # DB 마이그레이션
+│   ├── api/               # API 서버 (Node.js + Express)
+│   └── ui/                # 공통 UI 컴포넌트 (TODO)
+├── apps/
+│   ├── web/              # Next.js 웹 앱 ✅
+│   └── mobile/           # React Native/Expo 앱 (TODO)
+└── docs/                 # 문서 (PRD, API, DB)
+```
 
-- **통합 데이터 관리**: 뱅크샐러드, 도미노 증권, 수동 입력 등 여러 기관의 데이터를 하나로 통합
-- **자동화된 워크플로우**: 파일 업로드부터 CSV 내보내기까지 자동화
-- **CLI 인터페이스**: 명령줄에서 간편하게 사용
-- **Excel 템플릿 지원**: 수동 데이터 입력을 위한 Excel 템플릿 자동 생성
+## 기술 스택
 
-## 🚀 빠른 시작
+- **CLI**: Python 3.x
+- **Backend**: Node.js + Express + Supabase (Postgres)
+- **Frontend**: Next.js (Web), React Native/Expo (Mobile)
+- **공통**: TypeScript, Turborepo, pnpm
 
-### 설치
+## 빠른 시작
+
+### 1. 의존성 설치
 
 ```bash
-# 저장소 클론
-git clone https://github.com/yourusername/donmoa.git
-cd donmoa
+# pnpm 설치 (없는 경우)
+npm install -g pnpm
 
-# 가상환경 생성 및 활성화
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # macOS/Linux
-
-# 의존성 설치
-pip install -r requirements.txt
+# 프로젝트 의존성 설치
+pnpm install
 ```
 
-### 기본 사용법
+### 2. 환경 변수 설정
 
 ```bash
-# 1. 데이터 파일 준비
-# data/input/YYYY-MM-DD/ 폴더에 다음 파일들을 넣어주세요:
-# - domino.mhtml (도미노 증권 포트폴리오)
-# - banksalad.xlsx (뱅크샐러드 계좌 데이터)
-# - manual.xlsx (수동 입력 데이터)
-
-# 2. 데이터 수집 및 통합
-python -m donmoa collect
-
-# 3. 상태 확인
-python -m donmoa status
-
-# 4. 수동 입력 템플릿 생성
-python -m donmoa template
-
-# 5. 도움말 보기
-python -m donmoa --help
+# API 환경 변수
+cp packages/api/.env.example packages/api/.env
+# .env 파일 편집하여 Supabase 정보 입력
 ```
 
-## 🏗️ 아키텍처
-
-### 데이터 플로우
-```
-입력 파일 → Provider 파싱 → 스키마 변환 → 데이터 통합 → CSV 내보내기
-```
-
-### 핵심 컴포넌트
-- **DominoProvider**: 도미노 증권 MHTML 파일 파싱
-- **BanksaladProvider**: 뱅크샐러드 Excel 파일 파싱
-- **ManualProvider**: 수동 입력 Excel 파일 파싱
-- **DataCollector**: 여러 Provider 데이터 수집 및 통합
-- **CSVExporter**: 표준화된 CSV 파일 생성
-- **TemplateGenerator**: 수동 입력용 Excel 템플릿 생성
-- **통일된 스키마**: CashSchema, PositionSchema, TransactionSchema
-
-## 📁 프로젝트 구조
-
-```
-📁 donmoa/                    # 메인 패키지
-├── 📁 core/                  # 핵심 로직 (Donmoa, DataCollector, CSVExporter, TemplateGenerator)
-├── 📁 providers/             # Provider 구현 (Domino, Banksalad, Manual)
-├── 📁 utils/                 # 유틸리티 (Config, Logger, DateUtils)
-└── 📁 cli/                   # CLI 인터페이스
-
-📁 config/                    # 설정 파일
-├── 📄 config.yaml            # 기본 설정
-├── 📄 accounts.yaml          # 계좌 매핑 설정
-└── 📄 env.example            # 환경 변수 예시
-
-📁 data/                      # 데이터 디렉토리
-├── 📁 input/                 # 입력 파일
-│   └── 📁 YYYY-MM-DD/        # 날짜별 폴더 (domino.mhtml, banksalad.xlsx, manual.xlsx)
-└── 📁 export/                # 출력 CSV 파일 (cash.csv, positions.csv, transactions.csv)
-
-📁 logs/                      # 로그 파일
-📄 requirements.txt            # Python 의존성
-```
-
-## 🔧 설정
-
-### 기본 설정
-프로젝트는 `config/config.yaml`에서 기본 설정을 관리합니다:
-
-```yaml
-# 내보내기 설정
-export:
-  output_dir: "./data/export"
-  encoding: "utf-8"
-
-# 로깅 설정
-logging:
-  level: "INFO"
-  file: "./logs/donmoa.log"
-```
-
-### 계좌 매핑 설정
-
-1. **예시 파일 복사**:
-   ```bash
-   cp config/accounts.yaml.example config/accounts.yaml
-   ```
-
-2. **계좌 정보 수정**: `config/accounts.yaml`에서 실제 계좌 정보에 맞게 수정합니다:
-
-```yaml
-accounts:
-  - name: "월급통장-기업"
-    type: "은행"
-    mapping_name: ["월급통장-기업", "기업은행 월급통장"]
-
-  - name: "주식계좌-삼성"
-    type: "증권"
-    mapping_name: ["주식계좌-삼성", "삼성증권 주식계좌"]
-
-  - name: "페이서비스"
-    type: "페이"
-    mapping_name: ["페이", "카카오페이", "네이버페이", "토스페이"]
-```
-
-> **중요**: `accounts.yaml`은 개인 정보이므로 `.gitignore`에 추가되어 버전 관리에서 제외됩니다.
-> 실제 계좌 정보는 `accounts.yaml`에, 예시는 `accounts.yaml.example`에 저장됩니다.
-
-## 🔌 지원 Provider
-
-### Domino Provider (도미노 증권)
-- **입력**: `data/input/YYYY-MM-DD/domino.mhtml` (도미노 증권 포트폴리오 페이지)
-- **출력**: `positions.csv`, `cash.csv`
-- **데이터**: 계좌별 자산 보유량, 현금 보유량
-
-### Banksalad Provider (뱅크샐러드)
-- **입력**: `data/input/YYYY-MM-DD/banksalad.xlsx` (뱅크샐러드 계좌 데이터)
-- **출력**: `cash.csv`, `transactions.csv`
-- **데이터**: 은행/증권사 계좌별 잔고 정보, 거래 내역
-
-### Manual Provider (수동 입력)
-- **입력**: `data/input/YYYY-MM-DD/manual.xlsx` (수동 입력 데이터)
-- **출력**: `cash.csv`, `positions.csv`, `transactions.csv`
-- **데이터**: 사용자가 직접 입력한 자산 데이터
-
-## 📊 출력 파일
-
-### cash.csv (현금 데이터)
-```csv
-date,category,account,balance,currency,provider,collected_at
-2025-01-15,증권,증권,2467838.0,KRW,domino,2025-01-15T10:30:00
-2025-01-15,은행,주거래계좌,5000000.0,KRW,banksalad,2025-01-15T10:30:00
-```
-
-### positions.csv (포지션 데이터)
-```csv
-date,account,name,ticker,quantity,average_price,currency,provider,collected_at
-2025-01-15,위탁종합,팔란티어,PLTR,8.0,225902.0,KRW,domino,2025-01-15T10:30:00
-2025-01-15,투자계좌,삼성전자,005930,100.0,70000.0,KRW,manual,2025-01-15T10:30:00
-```
-
-### transactions.csv (거래 데이터)
-```csv
-date,account,transaction_type,amount,category,category_detail,currency,note,provider,collected_at
-2025-01-15,주거래계좌,입금,1000000.0,급여,월급,KRW,1월 급여,banksalad,2025-01-15T10:30:00
-```
-
-## 📖 사용 방법
-
-### 기본 워크플로우
+### 3. 데이터베이스 마이그레이션
 
 ```bash
-# 1. 데이터 파일 준비
-# data/input/YYYY-MM-DD/ 폴더에 파일들을 넣어주세요
-
-# 2. 데이터 수집 및 통합
-python -m donmoa collect
-
-# 3. 상태 확인
-python -m donmoa status
-
-# 4. 수동 입력 템플릿 생성
-python -m donmoa template
-
-# 5. 도움말 보기
-python -m donmoa --help
+# Supabase CLI로 마이그레이션 실행
+# (또는 Supabase 콘솔에서 SQL 직접 실행)
+cd packages/database
+# migrations/*.sql 파일 순서대로 실행
 ```
 
-### 고급 사용법
+### 4. 개발 서버 실행
 
 ```bash
-# 특정 입력 디렉토리 지정
-python -m donmoa collect --input-dir data/input/2025-01-15
+# API 서버 시작
+cd packages/api && pnpm dev
+# → http://localhost:3001
 
-# 출력 디렉토리 지정
-python -m donmoa collect --output-dir data/export/custom
+# 웹 앱 시작 (별도 터미널)
+cd apps/web
+cp .env.local.example .env.local
+# .env.local 파일 편집 (Supabase URL, API URL 입력)
+pnpm dev
+# → http://localhost:3000
 
-# 설정 파일 지정
-python -m donmoa collect --config custom_config.yaml
+# 또는 전체 개발 서버 시작 (Turborepo)
+pnpm dev
 ```
 
-### Python API 사용
+## 패키지 설명
 
-```python
-from donmoa.core.donmoa import Donmoa
+### @donmoa/shared
 
-# Donmoa 인스턴스 생성
-donmoa = Donmoa()
+공통 타입 및 유틸리티 패키지
 
-# 전체 워크플로우 실행
-result = donmoa.run_full_workflow()
+- 도메인 타입 (Snapshot, Portfolio, Analytics, Rebalance, Market, User)
+- API 요청/응답 스키마
+- 공통 유틸 (Money, Quantity, Pagination, Errors)
 
-# 결과 확인
-if result['status'] == 'success':
-    print(f"성공! {result['total_records']}개 레코드 처리")
-    for file_type, file_path in result['exported_files'].items():
-        print(f"{file_type}: {file_path}")
+### @donmoa/database
+
+데이터베이스 마이그레이션 스크립트
+
+- 8개 마이그레이션 파일
+- 정수화 규칙 (amount_minor, qty_nano, price_nano)
+- Row Level Security (RLS) 정책
+
+### @donmoa/api
+
+Node.js API 서버
+
+- 도메인 주도 설계 (DDD)
+- 레이어 아키텍처 (Presentation → Application → Domain → Infrastructure)
+- 미들웨어 (인증, 에러 핸들링, 검증, Idempotency)
+- **6개 도메인 완전 구현** (33개 API 엔드포인트)
+
+### @donmoa/web ✅
+
+Next.js 14 웹 애플리케이션
+
+- App Router, TypeScript
+- Tailwind CSS 디자인 시스템
+- TanStack Query (React Query)
+- Supabase Auth
+- **주요 페이지 구현 완료** (인증, 대시보드, 스냅샷, 포트폴리오, 리밸런싱)
+
+## 도메인 모델
+
+### 1. Snapshot Domain ✅
+- 파일 업로드, 파싱, 커밋
+- 스냅샷 조회
+- 4개 엔드포인트
+
+### 2. Portfolio Domain ✅
+- 계좌, 포지션, 현금 조회/수정
+- 배당 입력
+- 6개 엔드포인트
+
+### 3. Analytics Domain ✅
+- 대시보드 요약, 시계열, 비중
+- 현금흐름, 배당 집계
+- 5개 엔드포인트
+
+### 4. Rebalancing Domain ✅
+- 타겟/룰 관리
+- 리밸런싱 제안 생성
+- 5개 엔드포인트
+
+### 5. Market Data Domain ✅
+- 종목 검색, 시세, 환율 조회
+- 종목 메트릭스
+- 5개 엔드포인트
+
+### 6. User Preferences Domain ✅
+- 즐겨찾기, 카테고리, 대시보드 설정
+- 8개 엔드포인트
+
+## 개발 가이드
+
+### 레이어 아키텍처
+
+```
+[Presentation Layer]  handlers.ts     # HTTP 요청/응답
+  ↓
+[Application Layer]   service.ts      # 비즈니스 로직
+  ↓
+[Domain Layer]        @donmoa/shared  # 타입 정의
+  ↓
+[Infrastructure]      repository.ts   # DB 접근
 ```
 
-## 🚨 문제 해결
+### 새 도메인 추가 방법
 
-### 일반적인 오류
+1. `packages/shared/src/types/domain/` - 도메인 타입 정의
+2. `packages/shared/src/types/api/` - API 스키마 정의
+3. `packages/api/src/domains/[domain]/` - 도메인 로직 구현
+   - `repository.ts` - DB 접근
+   - `validator.ts` - 검증 스키마
+   - `service.ts` - 비즈니스 로직
+   - `handlers.ts` - HTTP 핸들러
+4. `packages/api/src/routes/` - 라우터 추가
 
-1. **ImportError: No module named 'donmoa'**
-   - 프로젝트 루트 디렉토리에서 실행하고 있는지 확인
-   - 가상환경이 활성화되어 있는지 확인
+### 정수화 규칙
 
-2. **ModuleNotFoundError: No module named 'requests'**
-   - `pip install -r requirements.txt` 실행
+- **금액**: `amount_minor = amount * 통화스케일` (KRW: 1, USD: 100)
+- **수량**: `qty_nano = quantity * 1e9`
+- **단가**: `price_nano = price * 1e9`
 
-3. **FileNotFoundError: config.yaml**
-   - `config/config.yaml` 파일이 존재하는지 확인
-
-4. **PermissionError: [Errno 13] Permission denied**
-   - 출력 디렉토리에 쓰기 권한이 있는지 확인
-
-### 로그 확인
+## 스크립트
 
 ```bash
-# 로그 파일 위치
-./logs/donmoa.log
+# 개발
+pnpm dev          # 전체 개발 서버
+pnpm build        # 전체 빌드
+pnpm type-check   # 타입 체크
+pnpm lint         # 린트
+pnpm test         # 테스트 (TODO)
 
-# 로그 레벨 변경 (config/config.yaml)
-logging:
-  level: "DEBUG"  # 더 상세한 로그
+# 정리
+pnpm clean        # 빌드 아티팩트 삭제
 ```
 
-## 📞 지원
+## 문서
 
-문제가 발생하거나 질문이 있으시면:
+- [PRD](docs/prd.txt) - 제품 요구사항 문서
+- [DB 스키마](docs/db.txt) - 데이터베이스 설계
+- [API 명세](docs/api.txt) - OpenAPI 3.1 스펙
+- [CLI 데이터 스키마](docs/db_cli.txt) - CLI 출력 형식
+- [Architecture](ARCHITECTURE.md) - 아키텍처 상세 설명
+- [Progress](PROGRESS.md) - 진행 상황 (전체 65% 완료)
+- [Phase 3 Complete](PHASE3_COMPLETE.md) - Web Frontend 완료 보고서
 
-1. [Issues](https://github.com/yourusername/donmoa/issues) 페이지 확인
-2. 새로운 이슈 생성
-3. 프로젝트 문서 참조
+## 라이선스
 
-## 📝 라이선스
+Private
 
-이 프로젝트는 MIT 라이선스 하에 배포됩니다.
+## 기여
 
-## 🤝 기여하기
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
-**Donmoa** - 개인 자산 관리의 새로운 시작 🚀
+현재 개인 프로젝트
